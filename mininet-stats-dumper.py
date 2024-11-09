@@ -276,7 +276,7 @@ def run_simulation():
     """
     Run the main simulation, setting up the network, generating traffic, and dumping counters.
     """
-    DURATION = 30 * 60 # half an hour
+    DURATION = 100 # half an hour
     MEASUREMENT_PERIOD = 3
     RATE_CHANGE_PERIOD = 10
     
