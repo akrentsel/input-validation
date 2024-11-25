@@ -29,7 +29,7 @@ Output:
 
 # Import necessary libraries
 from mininet.net import Mininet
-from mininet.node import OVSController
+from mininet.node import OVSController, Controller
 from mininet.log import setLogLevel, info
 from mininet.link import TCLink
 import time
@@ -91,12 +91,14 @@ def generate_traffic(h1, h2, duration=100, period=10):
         info(f"Time {i}: New traffic rate: {rate} Mbps\n")
         
         # Run iperf client and capture output
-        iperf_output = h1.cmd(f"iperf -c {h2.IP()} -t {period} -b {rate}M")
+        iperf_output = h1.popen(f"iperf -c {h2.IP()} -t {period} -b {rate}M")
+
         
         # Parse and log iperf output (you may want to implement a separate function for this)
         # For example:
         # log_iperf_results(iperf_output)
-        print(f'iperf_output: {iperf_output}')
+        print(f'iperf_output: {iperf_output.wait()}')
+        print(f'iperf_output: {iperf_output.communicate()}')
 
     # Stop iperf server on h2
     h2.cmd("killall iperf")
