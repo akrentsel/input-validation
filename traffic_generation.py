@@ -10,7 +10,7 @@ from utils import iperf_client_successful
 import random
 from subprocess import Popen
 from threading import Lock, Thread
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, wait
 import numpy as np
 class IperfStream():
     def __init__(self, src:Host, dst:Host, popen:Popen, bw:int=10, duration:float=5.0,):    
@@ -29,21 +29,25 @@ class TrafficControlBlock():
         self.total_streams:int = 0
         self.host_manager_map:dict = {}
         self.host_list:Collection[Host] = list(mininet.hosts)
+        self.kill_signal:bool = False # TODO: implement graceful termination...
         self.lock = Lock()
+        self.thread_executor:ThreadPoolExecutor = ThreadPoolExecutor(max_workers=len(mininet.hosts))
 
         for host in mininet.hosts:
             self.host_manager_map[host] = HostTrafficManager(host, self)
 
     def run_simulation(self):
-        for (host, manager) in self.host_manager_map:  
-            manager.run()
-            
-                 
+        futures = []
+        for host in self.host_list:
+            futures.append(self.thread_executor.submit(self.host_manager_map[host].run, 2*HostTrafficManager.FLOW_DURATION_DISTRIBUTION()))
+
+        wait(futures, return_when="FIRST_EXCEPTION")
+        # TODO: implement error detection on wait results
 
 '''
 Manages outgoing traffic for each host.
 '''
-class HostTrafficManager(Thread):
+class HostTrafficManager():
     FLOWS_PER_HOST = 3
     FLOW_BANDWIDTH_DISTIBUTION = lambda : max(1, np.random.normal(15, 5))
     FLOW_DURATION_DISTRIBUTION = lambda : max(3, np.random.normal(10, 3))
@@ -73,6 +77,9 @@ class HostTrafficManager(Thread):
         # this really is I believe the best that we can do :')
         # ref: https://superfastpython.com/python-concurrency-choose-api/
         # ref: https://superfastpython.com/threadpoolexecutor-vs-threads/ 
+        # PS: yes, I know about asyncio, but that doesnt seem to work here
+        #     b/c cannot just use create_subprocess_shell as we need to 
+        #     run them within the mininet cli, not a general shell
         while True: 
             while len(self.nontruant_iperf_stream_list) > 0 and self.nontruant_iperf_stream_list[0] < time.time():
                 first_stream = self.nontruant_iperf_stream_list.pop()
