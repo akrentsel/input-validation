@@ -119,34 +119,29 @@ class TelemetryControlBlock():
 
 class HostTelemetryManager():
     MAX_NUM_ROWS = 1000
-    def __init__(self, host:Host, experiment_control_block:ExperimentControlBlock, telemetry_control_block:TelemetryControlBlock, log_name_prefix:str, max_rows:int=MAX_NUM_ROWS, min_store_time:int=600):
-        self.filename_prefix = log_name_prefix
-        self.file_counter = 0
+    def __init__(self, host:Host, experiment_control_block:ExperimentControlBlock, telemetry_control_block:TelemetryControlBlock, log_dir:Path, base_log_name_prefix:str, error_log_name_prefix:str, max_rows:int=MAX_NUM_ROWS):
         self.experiment_control_block:ExperimentControlBlock = experiment_control_block
         self.telemetry_control_block:TelemetryControlBlock = telemetry_control_block
         self.host:Host = host
-        self.log_struct = TelemetryLogStruct()
-        self.min_store_time = min_store_time
+        self.base_log_struct = TelemetryLogStruct(log_dir, base_log_name_prefix, max_rows)
+        self.error_log_struct = TelemetryLogStruct(log_dir, error_log_name_prefix, max_rows)
 
+        self.delay_list = []
+        self.delay_end_time = -1
+        self.delay_start_idx = -1
 
-    async def append_logs(self, log_struct_list:Collection[Union[CounterStruct, StatusStruct, FlowStruct]]):
-        for struct in log_struct_list:
-            if (isinstance(struct, CounterStruct)):
-                self.log_struct.append_counter(struct)
-            elif isinstance(struct, StatusStruct):
-                self.log_struct.append_status(struct)
-            else:
-                assert isinstance(struct, FlowStruct)
-                self.log_struct.append_flow(struct)
-
-        if self.log_struct.write_to_disk(self.telemetry_control_block.log_dir / self.filename_prefix+int(self.file_counter), self.experiment_control_block.get_experiment_timestamp() - self.min_store_time):
-            self.file_counter += 1
+    async def push_logs(self, log_struct_list:Collection[Union[CounterStruct, StatusStruct, FlowStruct]]):
+        
 
         
 class TelemetryLogStruct():
     MIN_WRITE_LEN = 500
-    def __init__(self):
+    def __init__(self, log_dir:Path, log_prefix:str, max_rows):
         self.num_entries = 0
+        self.log_dir = log_dir
+        self.log_prefix = log_prefix
+        self.file_counter = 0
+        self.max_rows = max_rows
 
         # common
         self.timestamp_list = []
@@ -165,13 +160,13 @@ class TelemetryLogStruct():
         self.action_dict_list = {}
         self.info_dict_list = {}
 
-    @staticmethod
-    def corrupt_multiply(counter_struct:CounterStruct, factor:float):
-        return CounterStruct(counter_struct.timestamp, counter_struct.switch_name, counter_struct.interface_name, counter_struct.dir, counter_struct.stat_type, counter_struct.value*factor)
+    # @staticmethod
+    # def corrupt_multiply(counter_struct:CounterStruct, factor:float):
+    #     return CounterStruct(counter_struct.timestamp, counter_struct.switch_name, counter_struct.interface_name, counter_struct.dir, counter_struct.stat_type, counter_struct.value*factor)
     
-    @staticmethod
-    def corrupt_drop(telemetry_struct:TelemetryStruct):
-        return telemetry_struct.drop()
+    # @staticmethod
+    # def corrupt_drop(telemetry_struct:TelemetryStruct):
+    #     return telemetry_struct._drop()
 
     def append_counter(self, counter_struct:CounterStruct):
         self.timestamp_list.append(counter_struct.timestamp)
@@ -244,8 +239,9 @@ class TelemetryLogStruct():
                 return i - 1
         return -1
 
-    def write_to_disk(self, path:Path, timestamp_before:int=10e10)->bool:
-        idx_before = self.get_idx_before(timestamp_before)
+    def write_to_disk(self, path:Path, idx_before:int)->bool:
+        # idx_before = self.get_idx_before(timestamp_before)
+
         if (idx_before < TelemetryLogStruct.MIN_WRITE_LEN - 1):
             return False
         df_dict = {"timestamp": self.timestamp_list[:idx_before], "router_name": self.router_name_list[:idx_before], "telemetry_type":self.telemetry_type_list[:idx_before], "interface_name": self.interface_name_list[:idx_before], "counter_direction": self.direction_list[:idx_before], "counter_type": self.counter_type_list[:idx_before], "counter_val": self.counter_val_list[:idx_before]}
@@ -270,3 +266,15 @@ class TelemetryLogStruct():
         return True
 
 
+    async def _append_logs(self, log_struct_list:Collection[Union[CounterStruct, StatusStruct, FlowStruct]]):
+        for struct in log_struct_list:
+            if (isinstance(struct, CounterStruct)):
+                self.append_counter(struct)
+            elif isinstance(struct, StatusStruct):
+                self.append_status(struct)
+            else:
+                assert isinstance(struct, FlowStruct)
+                self.append_flow(struct)
+
+        if self.write_to_disk(self.log_dir / self.log_prefix+str(self.file_counter)):
+            self.file_counter += 1
