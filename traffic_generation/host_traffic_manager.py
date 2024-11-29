@@ -1,53 +1,24 @@
 '''
-Manages an iperf stream between two particular hosts.
+Manages outgoing traffic for each host.
 '''
+from __future__ import annotations
+from typing import TYPE_CHECKING
 from mininet.node import Host
 from mininet.net import Mininet
 from collections.abc import Collection
 from sortedcontainers import SortedList
 import time
-from utils import iperf_client_successful
 import random
 from subprocess import Popen
 from threading import Lock, Thread
 from concurrent.futures import ThreadPoolExecutor, wait
 import numpy as np
-class IperfStream():
-    def __init__(self, src:Host, dst:Host, popen:Popen, bw:int=10, duration:float=5.0,):    
-        self.src: Host = src
-        self.dst: Host = dst
-        self.bw: int = bw
-        self.popen: Popen = popen
-        self.expire_time: float = time.time() + duration
-        self.retry_cnt:int = 0 # we use this in HostTrafficManager.run() to implement exponential backoff for determining when to recheck statuses
 
-class TrafficControlBlock():
-    def __init__(self, mininet:Mininet, bw_limit:int=10e9, stream_limit:int=10e6):
-        self.BW_LIMIT:int = bw_limit
-        self.STREAM_LIMIT:int = stream_limit
-        self.total_bw:int = 0
-        self.total_streams:int = 0
-        self.host_manager_map:dict = {}
-        self.host_list:Collection[Host] = list(mininet.hosts)
-        self.kill_signal:bool = False # TODO: implement graceful termination...
-        self.lock = Lock()
-        self.thread_executor:ThreadPoolExecutor = ThreadPoolExecutor(max_workers=len(mininet.hosts))
+from traffic_generation.iperf_stream import IperfStream, iperf_client_successful
 
-        for host in mininet.hosts:
-            self.host_manager_map[host] = HostTrafficManager(host, self)
+if TYPE_CHECKING:
+    from traffic_generation.traffic_controller import TrafficControlBlock
 
-    def run_simulation(self):
-        futures = []
-        for host in self.host_list:
-            futures.append(self.thread_executor.submit(self.host_manager_map[host].run, 2*HostTrafficManager.FLOW_DURATION_DISTRIBUTION()))
-
-        wait(futures, return_when="FIRST_EXCEPTION")
-        # TODO: implement error detection on wait results
-    def signal_terminate(self):
-        self.kill_signal = True
-'''
-Manages outgoing traffic for each host.
-'''
 class HostTrafficManager():
     FLOWS_PER_HOST = 3
     FLOW_BANDWIDTH_DISTIBUTION = lambda : max(1, np.random.normal(15, 5))
@@ -133,10 +104,3 @@ class HostTrafficManager():
                 next_backoff_time = min(next_backoff_time, HostTrafficManager.compute_backoff_time(iperf_stream))
 
             time.sleep(min(next_sleep_time, next_backoff_time))
-
-
-
-
-                
-
-

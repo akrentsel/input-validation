@@ -1,4 +1,5 @@
-
+from __future__ import annotations
+from typing import TYPE_CHECKING
 from typing import Union
 from mininet.node import Host, Switch
 from mininet.net import Mininet
@@ -12,205 +13,15 @@ import asyncio
 from ovs.flow.ofp import OFPFlow
 from ovs.flow.decoders import FlowEncoder
 import pandas as pd
-from experiment import ExperimentControlBlock
 import random
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor, wait
 
-class TelemetryStruct():
-    def __init__(self, timestamp:float, switch_name:str):
-        self.timestamp = timestamp
-        self.switch_name = switch_name
-
-    def _delay(self, new_timestamp):
-        new_copy = self._copy()
-        assert new_timestamp > self.timestamp
-        new_copy.timestamp = new_timestamp
-        return new_copy
-
-class CounterStruct(TelemetryStruct):
-    def __init__(self, timestamp:float, switch_name:str, interface_name:str, dir:str, stat_type:str, value:int):
-        super(self, CounterStruct).__init__(timestamp, switch_name)
-        self.interface_name = interface_name
-        self.dir = dir
-        self.stat_type = stat_type
-        self.value = value
-    
-    def _copy(self):
-        return CounterStruct(self.timestamp, self.switch_name, 
-        self.interface_name, self.dir, self.stat_type, self.value)
-
-    def _drop(self):
-        corrupt_struct = self._copy()
-        corrupt_struct.value = None
-        return corrupt_struct
-    
-    def _multiply(self, factor):
-        corrupt_struct = self._copy()
-        corrupt_struct.value *= factor
-        return corrupt_struct
-
-    def _zero(self):
-        corrupt_struct = self._copy()
-        corrupt_struct.value = 0
-        return corrupt_struct
-
-class StatusStruct(TelemetryStruct):
-    def __init__(self, timestamp:float, switch_name:str, interface_name:str, status:bool):
-        super(self, StatusStruct).__init__(timestamp, switch_name)
-        self.interface_name = interface_name
-        self.status = status
-
-    def _copy(self):
-        return StatusStruct(self.timestamp, self.switch_name, self.interface_name, self.status)
-
-    def _drop(self):
-        corrupt_struct = self._copy()
-        corrupt_struct.status = None
-        return corrupt_struct
-    
-    def _flip(self):
-        corrupt_struct = self._copy()
-        corrupt_struct.status = not corrupt_struct.status
-        return corrupt_struct
-
-class FlowStruct(TelemetryStruct):
-    def __init__(self, timestamp:float, switch_name:str, flow_cli_output:str):
-        super(self, FlowStruct).__init__(timestamp, switch_name)
-        self.match_entries = {}
-        self.action_entries = {}
-        self.info_entries = {}
-        self.original = flow_cli_output
-
-        ofp_parsing:dict = json.loads(json.dumps(OFPFlow(flow_cli_output).dict(), indent=4, cls=FlowEncoder))
-        if "match" in ofp_parsing:
-            self.match_entries = FlowStruct.flatten_dict(ofp_parsing['match'])
-        if "actions" in ofp_parsing:
-            self.action_entries = FlowStruct.flatten_list(ofp_parsing['actions'], 'action')
-        if "info" in ofp_parsing:
-            self.info_entries = FlowStruct.flatten_dict(ofp_parsing['info'])
-
-        self.interface_name = self.info_entries['']
-
-    def copy(self):
-        return FlowStruct(self.timestamp, self.switch_name, self.original)
-    def _drop(self):
-        corrupt_struct = self.copy()
-        for ofp_dict in [corrupt_struct.match_entries, corrupt_struct.action_entries, corrupt_struct.info_entries]:
-            for k in ofp_dict.keys():
-                ofp_dict[k] = None
-        return corrupt_struct
-
-    @staticmethod 
-    def flatten_dict(d:dict, key_header:str="") -> dict:
-        res_dict = {}
-        for k, v in d.items():
-            new_key = f"{key_header}_{k}" if key_header != "" else str(k) 
-            if isinstance(v, list):
-                for (v_k, v_v) in FlowStruct.flatten_list(v).items():
-                    res_dict[f"{new_key}_{v_k}"] = v_v
-            if isinstance(v, dict):
-                for (v_k, v_v) in FlowStruct.flatten_dict(v).items():
-                    res_dict[f"{new_key}_{v_k}"] = v_v
-            else:
-                res_dict[new_key] = v
-
-        return res_dict
-    
-    @staticmethod
-    def flatten_list(l:list, key_header:str="") -> dict:
-        res_dict = {}
-        for idx, v_entry in enumerate(l):
-            new_key = f"{key_header}{idx}" if key_header != "" else str(idx)
-            if isinstance(v_entry, dict):
-                for (v_entry_k, v_entry_v) in FlowStruct.flatten_dict(v_entry).items():
-                    res_dict[f"{new_key}_{v_entry_k}"] = v_entry_v
-            else:
-                assert not isinstance(v_entry, list)
-                res_dict[new_key] = v_entry
-
-        return res_dict
-
-class ErrorGenerationControlBlock():
-    DROP_CODE = 0
-    COUNTER_SPIKE_CODE = 1
-    STATUS_FLIP_CODE = 2
-    COUNTER_ZERO_CODE = 3
-    DELAY_CODE = 4
-    def __init__(self, drop_prob:float=.01, counter_spike_prob:float=.01, status_flip_prob:float=.01, counter_zero_prob:float=.01, delay_prob:float=.01, delay_mean:float=40, delay_var:float=10, delay_min:float=20):
-        self.drop_prob = drop_prob
-        self.counter_spike_prob = counter_spike_prob
-        self.status_flip_prob = status_flip_prob
-        self.counter_zero_prob = counter_zero_prob
-        self.delay_prob = delay_prob
-        self.delay_time_fn = lambda : max(delay_min, np.random.normal(delay_mean, delay_var))
-
-    def pick_error_codes(self, telemetry_type):
-        picks = np.random.rand(5)
-        if telemetry_type == CounterStruct:
-            picks[ErrorGenerationControlBlock.STATUS_FLIP_CODE] = 1
-        if telemetry_type == StatusStruct:
-            picks[ErrorGenerationControlBlock.COUNTER_SPIKE_CODE, ErrorGenerationControlBlock.COUNTER_ZERO_CODE] = 1
-        if telemetry_type == FlowStruct:
-            picks[ErrorGenerationControlBlock.STATUS_FLIP_CODE, ErrorGenerationControlBlock.COUNTER_SPIKE_CODE, ErrorGenerationControlBlock.COUNTER_ZERO_CODE] = 1
-
-        selected = list(np.where(picks < np.array([self.drop_prob, self.counter_spike_prob, self.status_flip_prob, self.counter_zero_prob, self.delay_prob]))[0])
-        picks[picks >= np.array([self.drop_prob, self.counter_spike_prob, self.status_flip_prob, self.counter_zero_prob, self.delay_prob])] = 1
-        res_codes = []
-
-        if (ErrorGenerationControlBlock.DELAY_CODE in selected and ErrorGenerationControlBlock.DROP_CODE in selected):
-            if picks[ErrorGenerationControlBlock.DELAY_CODE] < picks[ErrorGenerationControlBlock.DROP_CODE]:
-                selected.remove(ErrorGenerationControlBlock.DROP_CODE)
-                picks[ErrorGenerationControlBlock.DROP_CODE] = 1
-            else:
-                 selected.remove(ErrorGenerationControlBlock.DELAY_CODE)
-                 picks[ErrorGenerationControlBlock.DELAY_CODE] = 1
-
-        if ErrorGenerationControlBlock.DELAY_CODE in selected:
-            res_codes.append(ErrorGenerationControlBlock.DELAY_CODE)
-            selected.remove(ErrorGenerationControlBlock.DELAY_CODE)
-            picks[ErrorGenerationControlBlock.DELAY_CODE] = 1
-
-        if np.min(picks) == 1:
-            return res_codes
-        
-        res_codes.append(np.argmin(picks))
-        return res_codes
-    
-    def pick_spike_factor(self):
-        return random.choice([0.1, 0.5, 2, 5, 10])
-    
-    def pick_delay(self):
-        return self.delay_time_fn()
-
-
-class TelemetryControlBlock():
-    def __init__(self, mininet:Mininet, log_dir:Path, experiment_control_block:ExperimentControlBlock, collection_interval:float=10):
-        self.switch_manager_map:dict = {}
-        self.switch_list:Collection[Host] = list(mininet.switches)
-        self.kill_signal:bool = False # TODO: implement graceful termination...
-        self.lock:Lock = Lock()
-        self.log_dir:Path = log_dir
-        self.experiment_control_block:ExperimentControlBlock = experiment_control_block
-
-        for switch in mininet.switches:
-            self.switch_manager_map[switch.name] = SwitchTelemetryManager(switch, self, log_dir, f"baseline_telemetry_{switch.name}", f"error_telemetry_{switch.name}")
-
-    def run_simulation(self):
-        futures = []
-        for host in self.switch_list:
-            futures.append(self.thread_executor.submit(self.host_manager_map[host].run))
-
-        wait(futures, return_when="FIRST_EXCEPTION")
-        # TODO: implement error detection on wait results
-
-    def signal_terminate(self):
-        self.kill_signal = True
-
-    def collate_logs(self):
-        for (switch_name, switch_manager) in self.switch_manager_map.items():
-            switch_manager.aggregate_logs()
+from telemetry_collection.telemetry_structs import CounterStruct, FlowStruct, StatusStruct
+from telemetry_collection.telemetry_logging import TelemetryLogStruct
+if TYPE_CHECKING:
+    from telemetry_collection.telemetry_controller import TelemetryControlBlock, ErrorGenerationControlBlock
 
 
 class SwitchTelemetryManager():

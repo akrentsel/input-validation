@@ -1,7 +1,7 @@
 from threading import Lock
 import networkx as nx
-import mininet
 from mininet.net import Mininet
+from mininet.topo import Topo
 import json
 import importlib
 import topohub.data
@@ -12,7 +12,7 @@ from networkx.algorithms.components import is_connected
 import asyncio
 import random
 
-class NetworkXTopo(mininet.net.Topo):
+class NetworkXTopo(Topo):
     # TODO: assert that bw, latency arguments are passed correctly
     def build(self, graph:nx.Graph, *args, **params):
         self.mn_nx_name_map = {}
@@ -32,7 +32,7 @@ class NetworkXTopo(mininet.net.Topo):
         super(NetworkXTopo, self).build(**params)
 
     @staticmethod
-    def construct_networkx_from_mininet_topo(mn_topo:mininet.net.Topo):
+    def construct_networkx_from_mininet_topo(mn_topo:Topo):
         nx_topo = mn_topo
         nx_topo.__class__ = NetworkXTopo # lol
         nx_topo.mn_nx_name_map = {}
@@ -53,4 +53,3 @@ class NetworkXTopo(mininet.net.Topo):
 
         nx_topo.base_nx_graph = nx_topo.nx_graph.copy()
         return nx_topo
-    
