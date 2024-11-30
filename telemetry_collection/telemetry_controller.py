@@ -16,23 +16,24 @@ import random
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor, wait
+import logging
 
 from telemetry_collection.telemetry_structs import CounterStruct, FlowStruct, StatusStruct
 from telemetry_collection.switch_telemetry_manager import SwitchTelemetryManager
 from experiment import ExperimentControlBlock
+from telemetry_collection.telemetry_config import ErrorGenerationConfig, TelemetryConfig
+import logging 
+
+logger = logging.getLogger("telemetry_collection")
 class ErrorGenerationControlBlock():
     DROP_CODE = 0
     COUNTER_SPIKE_CODE = 1
     STATUS_FLIP_CODE = 2
     COUNTER_ZERO_CODE = 3
     DELAY_CODE = 4
-    def __init__(self, drop_prob:float=.01, counter_spike_prob:float=.01, status_flip_prob:float=.01, counter_zero_prob:float=.01, delay_prob:float=.01, delay_mean:float=40, delay_var:float=10, delay_min:float=20):
-        self.drop_prob = drop_prob
-        self.counter_spike_prob = counter_spike_prob
-        self.status_flip_prob = status_flip_prob
-        self.counter_zero_prob = counter_zero_prob
-        self.delay_prob = delay_prob
-        self.delay_time_fn = lambda : max(delay_min, np.random.normal(delay_mean, delay_var))
+    def __init__(self, error_gen_config:ErrorGenerationConfig):
+        self.config:ErrorGenerationConfig = error_gen_config
+        self.delay_time_fn = lambda : max(error_gen_config.delay_min, np.random.normal(error_gen_config.delay_mean, error_gen_config.delay_var))
 
     def pick_error_codes(self, telemetry_type):
         picks = np.random.rand(5)
@@ -43,8 +44,8 @@ class ErrorGenerationControlBlock():
         if telemetry_type == FlowStruct:
             picks[ErrorGenerationControlBlock.STATUS_FLIP_CODE, ErrorGenerationControlBlock.COUNTER_SPIKE_CODE, ErrorGenerationControlBlock.COUNTER_ZERO_CODE] = 1
 
-        selected = list(np.where(picks < np.array([self.drop_prob, self.counter_spike_prob, self.status_flip_prob, self.counter_zero_prob, self.delay_prob]))[0])
-        picks[picks >= np.array([self.drop_prob, self.counter_spike_prob, self.status_flip_prob, self.counter_zero_prob, self.delay_prob])] = 1
+        selected = list(np.where(picks < np.array([self.config.drop_prob, self.config.counter_spike_prob, self.config.status_flip_prob, self.config.counter_zero_prob, self.config.delay_prob]))[0])
+        picks[picks >= np.array([self.config.drop_prob, self.config.counter_spike_prob, self.config.status_flip_prob, self.config.counter_zero_prob, self.config.delay_prob])] = 1
         res_codes = []
 
         if (ErrorGenerationControlBlock.DELAY_CODE in selected and ErrorGenerationControlBlock.DROP_CODE in selected):
@@ -74,16 +75,16 @@ class ErrorGenerationControlBlock():
 
 
 class TelemetryControlBlock():
-    def __init__(self, mininet:Mininet, log_dir:Path, experiment_control_block:ExperimentControlBlock, collection_interval:float=10):
+    def __init__(self, mininet:Mininet, experiment_control_block:ExperimentControlBlock, telemetry_config:TelemetryConfig):
         self.switch_manager_map:dict = {}
         self.switch_list:Collection[Host] = list(mininet.switches)
         self.kill_signal:bool = False # TODO: implement graceful termination...
         self.lock:Lock = Lock()
-        self.log_dir:Path = log_dir
+        self.config = telemetry_config
         self.experiment_control_block:ExperimentControlBlock = experiment_control_block
 
         for switch in mininet.switches:
-            self.switch_manager_map[switch.name] = SwitchTelemetryManager(switch, self, log_dir, f"baseline_telemetry_{switch.name}", f"error_telemetry_{switch.name}")
+            self.switch_manager_map[switch.name] = SwitchTelemetryManager(switch, self, self.config)
 
     def run_simulation(self):
         futures = []

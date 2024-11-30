@@ -17,22 +17,25 @@ import random
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor, wait
+import logging
 
+from telemetry_collection.telemetry_config import TelemetryConfig
 from telemetry_collection.telemetry_structs import CounterStruct, FlowStruct, StatusStruct
 from telemetry_collection.telemetry_logging import TelemetryLogStruct
 if TYPE_CHECKING:
     from telemetry_collection.telemetry_controller import TelemetryControlBlock, ErrorGenerationControlBlock
+import logging 
 
+logger = logging.getLogger("telemetry_collection")
 
 class SwitchTelemetryManager():
     MAX_NUM_ROWS = 1000
-    def __init__(self, switch:Switch, telemetry_control_block:TelemetryControlBlock, log_dir:Path, base_log_name_prefix:str, error_log_name_prefix:str, collection_interval:float=10, max_rows:int=MAX_NUM_ROWS, *kwargs):
+    def __init__(self, switch:Switch, telemetry_control_block:TelemetryControlBlock, telemetry_config:TelemetryConfig):# switch:Switch, telemetry_control_block:TelemetryControlBlock, base_log_dir:Path, error_log_dir:Path, base_log_name_prefix:str, error_log_name_prefix:str, collection_interval:float=10, max_rows:int=MAX_NUM_ROWS, *kwargs):
         self.telemetry_control_block:TelemetryControlBlock = telemetry_control_block
-        self.error_generation_control_block:ErrorGenerationControlBlock = ErrorGenerationControlBlock(self, kwargs)
         self.switch:Switch = switch
-        self.base_log_struct = TelemetryLogStruct(log_dir, base_log_name_prefix, max_rows)
-        self.error_log_struct = TelemetryLogStruct(log_dir, error_log_name_prefix, max_rows)
-        self.collection_interval = collection_interval
+        self.base_log_struct = TelemetryLogStruct(telemetry_config.base_log_dir, f"{telemetry_config.base_log_prefix}_{switch.name}", telemetry_config.max_rows)
+        self.error_log_struct = TelemetryLogStruct(telemetry_config.error_log_dir, f"{telemetry_config.error_log_prefix}_{switch.name}", telemetry_config.max_rows)
+        self.collection_interval = telemetry_config.collection_interval
         self.next_counter_collection = -1
         self.next_status_collection = -1
         self.next_flow_collection = -1

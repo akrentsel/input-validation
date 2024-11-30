@@ -13,22 +13,25 @@ from subprocess import Popen
 from threading import Lock, Thread
 from concurrent.futures import ThreadPoolExecutor, wait
 import numpy as np
+import logging
 
 from traffic_generation.iperf_stream import IperfStream, iperf_client_successful
+from traffic_generation.traffic_generation_config import TrafficGenerationConfig
 
 if TYPE_CHECKING:
     from traffic_generation.traffic_controller import TrafficControlBlock
 
+logger = logging.getLogger("traffic_generation")
 class HostTrafficManager():
-    FLOWS_PER_HOST = 3
-    FLOW_BANDWIDTH_DISTIBUTION = lambda : max(1, np.random.normal(15, 5))
-    FLOW_DURATION_DISTRIBUTION = lambda : max(3, np.random.normal(10, 3))
 
     @staticmethod
     def compute_backoff_time(iperf_stream:IperfStream):
         return max(.5, min(5, 1.5**iperf_stream.retry_cnt))
 
-    def __init__(self, host:Host, traffic_control_block:TrafficControlBlock):
+    def __init__(self, host:Host, traffic_control_block:TrafficControlBlock, traffic_generation_config:TrafficGenerationConfig):
+        self.flows_per_host = traffic_generation_config.flows_per_host
+        self.flow_bandwidth_distribution = lambda: max(traffic_generation_config.flow_bandwidth_min, np.random.normal(traffic_generation_config.flow_bandwidth_mean, traffic_generation_config.flow_bandwidth_var))
+        self.flow_duration_distribution = lambda: max(traffic_generation_config.flow_duration_min, np.random.normal(traffic_generation_config.flow_duration_mean, traffic_generation_config.flow_duration_var))
         self.traffic_control_block = traffic_control_block
         self.host:Host = host
         self.nontruant_iperf_stream_list:Collection[IperfStream] = SortedList(key=lambda stream: stream.expire_time) # maps unix timestamp to stream by expiration time
@@ -76,17 +79,17 @@ class HostTrafficManager():
                 del self.truant_iperf_stream_list[idx]
 
             streams_to_create_args = []
-            for next_host in random.sample(self.traffic_control_block.host_list, len(self.nontruant_iperf_stream_list) - HostTrafficManager.FLOWS_PER_HOST):
+            for next_host in random.sample(self.traffic_control_block.host_list, len(self.nontruant_iperf_stream_list) - self.flows_per_host):
                 if next_host == self.host:
                     continue
                 if (self.traffic_control_block.total_streams == self.traffic_control_block.STREAM_LIMIT):
                     break
-                bw = HostTrafficManager.FLOW_BANDWIDTH_DISTIBUTION()
+                bw = self.flow_bandwidth_distribution()
                 if (self.traffic_control_block.total_bw + bw > self.traffic_control_block.BW_LIMIT):
                     continue
                 self.traffic_control_block.total_bw += bw
                 self.traffic_control_block.total_streams += 1
-                duration = HostTrafficManager.FLOW_DURATION_DISTRIBUTION()
+                duration = self.flow_duration_distribution()
                 streams_to_create_args.append((next_host, bw, duration))
 
             self.traffic_control_block.lock.release()

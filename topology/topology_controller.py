@@ -11,15 +11,18 @@ from mininet.node import Host, Switch
 from networkx.algorithms.components import is_connected
 import asyncio
 import random
+import logging
 
+from topology.topology_config import NetworkEventConfig
 from topology.network_topo import NetworkXTopo
 
+logger = logging.getLogger("topology")
 class TopologyControlBlock():
     AVG_LINK_LATENCY_TARGET = 40
-    def __init__(self, nx_topo:NetworkXTopo, event_interarrival_fn):
+    def __init__(self, nx_topo:NetworkXTopo, network_event_config:NetworkEventConfig):
         self.nx_topo = nx_topo
         self.mininet = Mininet(self.nx_topo)
-        self.event_interarrival_fn = event_interarrival_fn
+        self.event_interarrival_fn = lambda : np.random.exponential(network_event_config.event_interarrival_mean)
         assert is_connected(self.nx_topo.nx_graph)
         self.kill_signal = False
 

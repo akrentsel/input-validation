@@ -16,7 +16,9 @@ import random
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor, wait
+import logging
 
+logger = logging.getLogger("telemetry_collection")
 class TelemetryStruct():
     def __init__(self, timestamp:float, switch_name:str):
         self.timestamp = timestamp

@@ -11,7 +11,9 @@ from mininet.node import Host, Switch
 from networkx.algorithms.components import is_connected
 import asyncio
 import random
+import logging
 
+logger = logging.getLogger("topology")
 class NetworkXTopo(Topo):
     # TODO: assert that bw, latency arguments are passed correctly
     def build(self, graph:nx.Graph, *args, **params):

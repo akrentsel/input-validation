@@ -19,6 +19,9 @@ import time
 from concurrent.futures import ThreadPoolExecutor, wait
 from telemetry_collection.telemetry_structs import FlowStruct, CounterStruct, StatusStruct
 from experiment import ExperimentControlBlock
+import logging 
+
+logger = logging.getLogger("telemetry_collection")
 class TelemetryLogStruct():
     MIN_WRITE_LEN = 500
     def __init__(self, log_dir:Path, log_prefix:str, max_rows):
