@@ -140,6 +140,8 @@ class SwitchTelemetryManager():
                         ("errs", int(tx_match.group(4))),
                     ]:
                         parsed_data.append(CounterStruct(timestamp, self.switch.name, current_port, "tx", stat_name, value))
+
+        logger.debug(f"switch {self.switch.name}: collecting {len(parsed_data)} counters at time {timestamp}")
         return parsed_data
         
     def collect_flows(self):
@@ -150,7 +152,7 @@ class SwitchTelemetryManager():
         flow_entry_list = []
         for line in lines:
             flow_entry_list.append(FlowStruct(timestamp, self.switch.name, line))
-
+        logger.debug(f"switch {self.switch.name}: collecting {len(flow_entry_list)} flows at time {timestamp}")
         return flow_entry_list
 
     def collect_statuses(self):
@@ -159,23 +161,33 @@ class SwitchTelemetryManager():
         for iface in self.switch.intfs:
             status_entry_list.append(StatusStruct(timestamp, self.switch.name, iface.name, iface.isUp()))
 
+        logger.debug(f"switch {self.switch.name}: collecting {len(status_entry_list)} statuses at time {timestamp}")
         return status_entry_list
 
 
     async def push_logs(self, log_struct_list:Collection[Union[CounterStruct, StatusStruct, FlowStruct]]):
         self.base_log_struct.append_logs(log_struct_list)
         corrupt_append_list = []
+        num_drops = 0
+        num_spikes = 0
+        num_status_flips = 0
+        num_zeros = 0
+        num_delays = 0
         for log_struct in log_struct_list:
             error_codes = self.error_generation_control_block.pick_error_codes(type(log_struct))
         
             if (ErrorGenerationControlBlock.DROP_CODE in error_codes):
+                num_drops += 1
                 continue
             corrupt_log_struct = log_struct
             if (ErrorGenerationControlBlock.COUNTER_SPIKE_CODE in error_codes):
+                num_spikes += 1
                 corrupt_log_struct = log_struct._multiply(ErrorGenerationControlBlock.pick_spike_factor())
             elif (ErrorGenerationControlBlock.STATUS_FLIP_CODE in error_codes):
+                num_status_flips += 1
                 corrupt_log_struct = log_struct._flip()
             elif (ErrorGenerationControlBlock.COUNTER_ZERO_CODE in error_codes):
+                num_zeros += 1
                 corrupt_log_struct = log_struct._zero()
             
             delay_this = False
@@ -193,6 +205,7 @@ class SwitchTelemetryManager():
                 delay_this = True
 
             if delay_this:
+                num_delays += 1
                 self.delay_list.append(corrupt_log_struct)
             else:
                 while (len(self.delay_list) > 0 and corrupt_log_struct.timestamp >= self.delay_list[0].timestamp):
@@ -204,9 +217,12 @@ class SwitchTelemetryManager():
 
                 corrupt_append_list.append(corrupt_log_struct)
                 
+        if (num_delays + num_drops + num_spikes + num_status_flips + num_zeros > 0):
+            logger.debug(f"switch {self.switch.name}: applying {num_delays} delays, {num_drops} drops, {num_spikes} spikes, {num_status_flips} flips, {num_zeros} zeros for telemetry starting at timestamp {log_struct_list[0].timestamp}")
         self.error_log_struct.append_logs(corrupt_append_list)
 
     def finalize_logs(self):
+        logger.debug(f"switch {self.switch.name}: finalizing logs")
         self.error_log_struct.append_logs(self.delay_list)
         self.delay_list = []
         self.delay_end_time = -1
@@ -218,15 +234,16 @@ class SwitchTelemetryManager():
         self.base_log_struct.file_counter += 1
 
     def aggregate_logs(self):
+        logger.debug(f"switch {self.switch.name}: aggregating {self.base_log_struct.file_counter} logs")
         base_df_list = []
         for i in range(self.base_log_struct.file_counter):
             base_df_list.append(pd.read_csv(self.base_log_struct.get_log_path(i, False)))
 
-        pd.concat(base_df_list, axis=0).to_csv(self.base_log_struct.get_log_path(-1, True))
+        pd.concat(base_df_list, axis=0).to_csv(self.base_log_struct.get_log_path(-1, True), mode='x')
         base_df_list = []
         error_df_list = []
         for i in range(self.error_log_struct.file_counter):
             error_df_list.append(pd.read_csv(self.error_log_struct.get_log_path(i, False)))
 
-        pd.concat(error_df_list, axis=0).to_csv(self.error_log_struct.get_log_path(-1, True))
+        pd.concat(error_df_list, axis=0).to_csv(self.error_log_struct.get_log_path(-1, True), mode='x')
         error_df_list = []

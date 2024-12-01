@@ -131,6 +131,7 @@ class TelemetryLogStruct():
         return self.log_dir / f"{self.log_prefix}_{file_idx}.csv" if not aggregated else self.log_dir / f"{self.log_prefix}_aggregated.csv"
 
     def write_to_disk(self, path:Path, idx_before:int=-1, force=True)->bool:
+        logger.debug(f"writing to disk: {path}")
         # idx_before = self.get_idx_before(timestamp_before)
         if idx_before == -1:
             idx_before = len(self.timestamp_list)
@@ -141,7 +142,7 @@ class TelemetryLogStruct():
             for k, v in dict_list.items():
                 df_dict[k] = v[:idx_before]
 
-        pd.DataFrame(df_dict).to_csv(path)
+        pd.DataFrame(df_dict).to_csv(path, mode='x')
 
         self.timestamp_list = self.timestamp_list[idx_before:]
         self.router_name_list = self.router_name_list[idx_before:]

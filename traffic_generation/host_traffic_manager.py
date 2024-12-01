@@ -38,9 +38,9 @@ class HostTrafficManager():
         self.truant_iperf_stream_list:Collection[IperfStream] = SortedList(key=lambda stream: stream.expire_time)
         host.cmd("iperf -s &")
 
-    def create_stream(self, dst:Host, bw:int=10, duration:float=5.0):
+    def create_stream(self, dst:Host, bw:float=10, duration:float=5.0):
         #ASSUMPTION: lock has been acquired by us (there isn't a official way of checking if we have the lock, fuck python)
-
+        logger.debug(f"creating stream between {self.host} and {dst} with duration {duration}, bandwidth {bw}")
         iperf_popen = self.host.popen(f"iperf -c {dst.IP()} -t {duration} -b {bw}M")
         self.nontruant_iperf_stream_list.append(IperfStream(self.host, dst, iperf_popen, bw, duration))
 
@@ -56,7 +56,7 @@ class HostTrafficManager():
         #     b/c cannot just use create_subprocess_shell as we need to 
         #     run them within the mininet cli, not a general shell
         while not self.traffic_control_block.kill_signal: 
-            while len(self.nontruant_iperf_stream_list) > 0 and self.nontruant_iperf_stream_list[0] < time.time():
+            while len(self.nontruant_iperf_stream_list) > 0 and self.nontruant_iperf_stream_list[0].expire_time < time.time():
                 first_stream = self.nontruant_iperf_stream_list.pop()
                 self.trunant_iperf_stream_list.append(first_stream)
 
@@ -79,10 +79,10 @@ class HostTrafficManager():
                 del self.truant_iperf_stream_list[idx]
 
             streams_to_create_args = []
-            for next_host in random.sample(self.traffic_control_block.host_list, len(self.nontruant_iperf_stream_list) - self.flows_per_host):
+            for next_host in random.sample(self.traffic_control_block.host_list, self.flows_per_host - len(self.nontruant_iperf_stream_list) - len(self.truant_iperf_stream_list)):
                 if next_host == self.host:
                     continue
-                if (self.traffic_control_block.total_streams == self.traffic_control_block.STREAM_LIMIT):
+                if (self.traffic_control_block.total_streams >= self.traffic_control_block.STREAM_LIMIT):
                     break
                 bw = self.flow_bandwidth_distribution()
                 if (self.traffic_control_block.total_bw + bw > self.traffic_control_block.BW_LIMIT):

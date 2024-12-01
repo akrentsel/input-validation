@@ -83,20 +83,33 @@ class TelemetryControlBlock():
         self.config = telemetry_config
         self.experiment_control_block:ExperimentControlBlock = experiment_control_block
 
+        Path(self.config.base_log_dir).mkdir(exist_ok=False)
+        if (Path(self.config.base_log_dir) != Path(self.config.error_log_dir)):
+            Path(self.config.error_log_dir).mkdir(exist_ok=False)
+
         for switch in mininet.switches:
             self.switch_manager_map[switch.name] = SwitchTelemetryManager(switch, self, self.config)
 
     def run_simulation(self):
+        logger.debug("starting telemetry simulation")
         futures = []
         for host in self.switch_list:
             futures.append(self.thread_executor.submit(self.host_manager_map[host].run))
 
-        wait(futures, return_when="FIRST_EXCEPTION")
-        # TODO: implement error detection on wait results
+        (done_futures, notdone_futures) = wait(futures, return_when="FIRST_EXCEPTION")
+
+        for future in done_futures:
+            exception = future.exception()
+            if (exception is not None):
+                raise exception
+            
+        logger.debug("finished telemetry simulation")
 
     def signal_terminate(self):
+        logger.debug("kill switch flipped; terminating telemetry simulation")
         self.kill_signal = True
 
     def collate_logs(self):
+        logger.debug("collating logs")
         for (switch_name, switch_manager) in self.switch_manager_map.items():
             switch_manager.aggregate_logs()

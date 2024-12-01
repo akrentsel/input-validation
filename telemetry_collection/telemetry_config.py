@@ -11,9 +11,9 @@ class ErrorGenerationConfig(BaseModel):
     delay_min:float = 20
 
 class TelemetryConfig(BaseModel):
-    logging_path: str
-    base_log_dir: Path
-    error_log_dir: Path
+    logging_dir: str
+    base_log_dir: str
+    error_log_dir: str
     collection_interval: float
     base_log_prefix: str
     error_log_prefix: str

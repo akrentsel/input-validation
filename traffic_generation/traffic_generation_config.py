@@ -3,7 +3,7 @@ from pydantic import BaseModel
 import numpy as np
 
 class TrafficGenerationConfig(BaseModel):
-    logging_path: str
+    logging_dir: str
     flow_bandwidth_min: float = 1
     flow_bandwidth_mean: float = 15
     flow_bandwidth_var: float = 5

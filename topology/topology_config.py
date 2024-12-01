@@ -4,7 +4,7 @@ class NetworkEventConfig(BaseModel):
     event_interrarival_mean: 60
 
 class TopologyConfig(BaseModel):
-    logging_path: str
+    logging_dir: str
     use_bw_delay:bool = False
     
     naive_link_bw:int = 1e5
@@ -15,4 +15,9 @@ class TopologyConfig(BaseModel):
 
     topohub_name:str = None
     graph_file_path:str = None
+    networkx_graph_read_function:str = None
     mininet_topo_path:str = None
+
+    topohub_mean_link_delay:int = 25
+
+    hosts_per_switch:int = 2
