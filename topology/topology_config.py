@@ -1,7 +1,7 @@
 from pathlib import Path
 from pydantic import BaseModel
 class NetworkEventConfig(BaseModel):
-    event_interrarival_mean: 60
+    event_interrarival_mean: int =  60
 
 class TopologyConfig(BaseModel):
     logging_dir: str

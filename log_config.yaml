@@ -1,13 +1,14 @@
 version: 1
 formatters:
   verbose_singlethread:
-    format: '%(levelname)s %(asctime)s %(name)s at
-%(filename)s:%(funcName)s:%(lineno)d: %(message)s'
+    format: '%(levelname)s %(asctime)s %(name)s at %(filename)s:%(funcName)s:%(lineno)d: %(message)s'
   verbose_multithread:
     format: '%(levelname)s %(asctime)s %(name)s, process %(process)d:%(thread)d at 
 %(filename)s:%(funcName)s:%(lineno)d: %(message)s'
-  simple_singlethread: '%(levelname)s %(asctime)s %(name)s: %(message)s'
-  simple_multithread: '%(levelname)s %(asctime)s %(name)s, process %(process)d:%(thread)d: %(message)s'
+  simple_singlethread: 
+    format: '%(levelname)s %(asctime)s %(name)s: %(message)s'
+  simple_multithread: 
+    format: '%(levelname)s %(asctime)s %(name)s, process %(process)d:%(thread)d: %(message)s'
 
 handlers:
   console:

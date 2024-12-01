@@ -54,4 +54,5 @@ traffic_generation_config:
 
 experiment_config:
   logging_dir: "/home/mininet/input-validation/.logout"
-  experiment_time_mins: 1
+  experiment_time_mins: .25
+  logging_config_filepath: "/home/mininet/input-validation/log_config.yaml"

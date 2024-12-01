@@ -1,3 +1,4 @@
+from multiprocessing.connection import Connection
 from mininet.node import Host
 from mininet.net import Mininet
 from collections.abc import Collection
@@ -28,13 +29,24 @@ class TrafficControlBlock():
         self.thread_executor:ThreadPoolExecutor = ThreadPoolExecutor(max_workers=len(mininet.hosts))
 
         for host in mininet.hosts:
-            self.host_manager_map[host] = HostTrafficManager(host, self)
+            self.host_manager_map[host] = HostTrafficManager(host, self, traffic_generation_config)
 
-    def run_simulation(self):
+    def run_simulation(self, conn:Connection):
         logger.debug(f"running traffic simulation")
         futures = []
         for host in self.host_list:
             futures.append(self.thread_executor.submit(self.host_manager_map[host].run, 2*self.host_manager_map[host].flow_duration_distribution()))
+
+        while not conn.poll():
+            (done_futures, notdone_futures) = wait(futures, return_when="FIRST_EXCEPTION", timeout=2)
+
+            for future in done_futures:
+                exception = future.exception()
+                if (exception is not None):
+                    raise exception
+        
+        if conn.poll():
+            self.kill_signal = True
 
         (done_futures, notdone_futures) = wait(futures, return_when="FIRST_EXCEPTION")
 

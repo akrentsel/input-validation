@@ -1,4 +1,5 @@
 
+from multiprocessing.connection import Connection
 from typing import Union
 from mininet.node import Host, Switch
 from mininet.net import Mininet
@@ -79,7 +80,6 @@ class TelemetryControlBlock():
         self.switch_manager_map:dict = {}
         self.switch_list:Collection[Host] = list(mininet.switches)
         self.kill_signal:bool = False # TODO: implement graceful termination...
-        self.lock:Lock = Lock()
         self.config = telemetry_config
         self.experiment_control_block:ExperimentControlBlock = experiment_control_block
 
@@ -90,11 +90,22 @@ class TelemetryControlBlock():
         for switch in mininet.switches:
             self.switch_manager_map[switch.name] = SwitchTelemetryManager(switch, self, self.config)
 
-    def run_simulation(self):
+    def run_simulation(self, conn:Connection):
         logger.debug("starting telemetry simulation")
         futures = []
         for host in self.switch_list:
             futures.append(self.thread_executor.submit(self.host_manager_map[host].run))
+        
+        while not conn.poll():
+            (done_futures, notdone_futures) = wait(futures, return_when="FIRST_EXCEPTION", timeout=2)
+
+            for future in done_futures:
+                exception = future.exception()
+                if (exception is not None):
+                    raise exception
+        
+        if conn.poll():
+            self.kill_signal = True
 
         (done_futures, notdone_futures) = wait(futures, return_when="FIRST_EXCEPTION")
 

@@ -30,7 +30,7 @@ class NetworkXTopo(Topo):
 
         for node in graph.nodes:
             logger.debug(f"adding switch {'s'+str(node)}")
-            s = self.addSwitch('s'+str(node), **{k: v for k, v in node.items() if k not in ['id', 'name']})
+            s = self.addSwitch('s'+str(node), **{k: v for k, v in graph.nodes[node].items() if k not in ['id', 'name']})
             self.mn_nx_name_map['s'+str(node)] = node
             self.nx_mn_name_map[node] = 's'+str(node)
 
@@ -49,11 +49,11 @@ class NetworkXTopo(Topo):
                 logger.debug(f"adding edge between {end1} and {end2} without bw/delay")
             else:
                 logger.debug(f"adding edge between {end1} and {end2} with bw {bw}, delay {delay}")
-            self.addLink('s'+str(end1), 's'+str(end2), **{k: v for k, v in graph.edges[end1, end2].items() if k not in ['source', 'target']}, bw=bw, delay=delay)
+            self.addLink('s'+str(end1), 's'+str(end2), **{k: v for k, v in graph.edges[end1, end2].items() if k not in ['source', 'target', 'bw', 'delay']}, bw=bw, delay=delay)
 
         super(NetworkXTopo, self).build(params)
 
-        assert len(self.hosts) >= 2, f"only {len(self.hosts)} found in constructed topology; expected at least 2"
+        assert len(self.hosts()) >= 2, f"only {len(self.hosts())} found in constructed topology; expected at least 2"
 
     @staticmethod
     def construct_nx_topo_from_mininet_topo(mn_topo:Topo):
@@ -84,12 +84,12 @@ class NetworkXTopo(Topo):
         logger.info(f"constructing topology from graph file {topology_config.graph_file_path}")
         nx_graph = getattr(nx, topology_config.networkx_graph_read_function)(topology_config.graph_file_path)
 
-        NetworkXTopo().build(nx_graph, topology_config, params)
+        return NetworkXTopo(graph=nx_graph, topology_config=topology_config, **params)
 
     @staticmethod
     def construct_nx_topo_from_nx_graph(graph:nx.Graph, topology_config:TopologyConfig, **params):
         logger.info(f"constructing topology from networkx graph")
-        return NetworkXTopo().build(graph, topology_config, params)
+        return NetworkXTopo(graph=graph, topology_config=topology_config, **params)
     
     @staticmethod
     def construct_nx_topo_from_topohub(topology_config:TopologyConfig, **params):
@@ -97,20 +97,20 @@ class NetworkXTopo(Topo):
         topo = topohub.get(topology_config.topohub_name)
         nx_graph = nx.node_link_graph(topo)
 
-        dist_mean = np.nanmean([edge.get('dist', np.nan) for edge in nx_graph.edges])
+        dist_mean = np.nanmean([nx_graph.edges[edge[0], edge[1]].get('dist', np.nan) for edge in nx_graph.edges])
 
         for (node1, node2) in nx_graph.edges:
             nx_graph.edges[node1, node2]['delay'] = topology_config if 'dist' not in nx_graph.edges[node1, node2] else (nx_graph.edges[node1, node2]['dist'] / dist_mean * topology_config.topohub_mean_link_delay)
 
-        return NetworkXTopo().build(nx_graph, topology_config, params)
+        return NetworkXTopo(graph=nx_graph, topology_config=topology_config, **params)
     
     @staticmethod
     def construct_nx_topo_from_config(topology_config:TopologyConfig, **params):
         if (topology_config.topohub_name is not None):
-            return NetworkXTopo.construct_nx_topo_from_topohub(topology_config, params)
+            return NetworkXTopo.construct_nx_topo_from_topohub(topology_config, **params)
         elif topology_config.graph_file_path is not None:
             assert networkx_graph_read_function is not None, "need to specify networkX function for reading graph"
 
-            return NetworkXTopo.construct_nx_topo_from_graph_file(topology_config, params)
+            return NetworkXTopo.construct_nx_topo_from_graph_file(topology_config, **params)
         else:
             raise ValueError("configuration file does not specify topology to import!")
