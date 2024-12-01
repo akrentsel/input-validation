@@ -26,37 +26,41 @@ class TrafficControlBlock():
         self.host_list:Collection[Host] = list(mininet.hosts)
         self.kill_signal:bool = False # TODO: implement graceful termination...
         self.lock = Lock()
-        self.thread_executor:ThreadPoolExecutor = ThreadPoolExecutor(max_workers=len(mininet.hosts))
+        self.thread_executor:ThreadPoolExecutor = ThreadPoolExecutor(max_workers = 3 * len(self.host_list))
 
         for host in mininet.hosts:
             self.host_manager_map[host] = HostTrafficManager(host, self, traffic_generation_config)
 
     def run_simulation(self, conn:Connection):
-        logger.debug(f"running traffic simulation")
-        futures = []
-        for host in self.host_list:
-            futures.append(self.thread_executor.submit(self.host_manager_map[host].run, 2*self.host_manager_map[host].flow_duration_distribution()))
+        try:
+            logger.debug(f"running traffic simulation")
+            futures = []
+            for host in self.host_list:
+                futures.append(self.thread_executor.submit(self.host_manager_map[host].run, 2*self.host_manager_map[host].flow_duration_distribution()))
 
-        while not conn.poll():
-            (done_futures, notdone_futures) = wait(futures, return_when="FIRST_EXCEPTION", timeout=2)
+            while not conn.poll():
+                (done_futures, notdone_futures) = wait(futures, return_when="FIRST_EXCEPTION", timeout=2)
+
+                for future in done_futures:
+                    exception = future.exception()
+                    if (exception is not None):
+                        raise exception
+            
+            if conn.poll():
+                self.kill_signal = True
+
+            (done_futures, notdone_futures) = wait(futures, return_when="FIRST_EXCEPTION")
 
             for future in done_futures:
                 exception = future.exception()
                 if (exception is not None):
                     raise exception
-        
-        if conn.poll():
-            self.kill_signal = True
-
-        (done_futures, notdone_futures) = wait(futures, return_when="FIRST_EXCEPTION")
-
-        for future in done_futures:
-            exception = future.exception()
-            if (exception is not None):
-                raise exception
-            
-        logger.debug("finished traffic simulation")
-        # TODO: implement error detection on wait results
+                
+            logger.debug("finished traffic simulation")
+            # TODO: implement error detection on wait results
+        except Exception as e:
+            logger.error(e, exc_info=True)
+            raise e 
     def signal_terminate(self):
         logger.debug("received kill signal; terminating")
         self.kill_signal = True

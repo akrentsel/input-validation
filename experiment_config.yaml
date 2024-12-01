@@ -1,9 +1,9 @@
 error_generation_config:
-  drop_prob: .01
-  counter_spike_prob: .01
-  status_flip_prob: .01
-  counter_zero_prob: .01
-  delay_prob: .01
+  drop_prob: .33
+  counter_spike_prob: .33
+  status_flip_prob: .33
+  counter_zero_prob: .33
+  delay_prob: .33
   delay_mean: 40.0
   delay_var: 10.0
   delay_min: 20.0
@@ -12,7 +12,7 @@ telemetry_config:
   logging_dir: "/home/mininet/input-validation/.logout"
   base_log_dir: "/home/mininet/experiment-out/base"
   error_log_dir: "/home/mininet/experiment-out/error"
-  collection_interval: 15
+  collection_interval: 10
   base_log_prefix: "base_telemetry"
   error_log_prefix: "error_telemetry"
   max_rows: 500
@@ -54,5 +54,5 @@ traffic_generation_config:
 
 experiment_config:
   logging_dir: "/home/mininet/input-validation/.logout"
-  experiment_time_mins: .25
+  experiment_time_mins: 1
   logging_config_filepath: "/home/mininet/input-validation/log_config.yaml"

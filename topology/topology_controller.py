@@ -48,27 +48,31 @@ class TopologyControlBlock():
     #     self.event_interarrival_fn = None
 
     def run_simulation(self, conn:Connection):
-        logger.debug("start running topology control")
-        while not conn.poll():
-            time.sleep(self.event_interarrival_fn())
+        try:
+            logger.debug("start running topology control")
+            while not conn.poll():
+                time.sleep(self.event_interarrival_fn())
 
-            edge = random.sample(set([tuple(e) for e in self.nx_topo.base_nx_graph.edges]), 1)
-            n1, n2 = self.mininet.getNodeByName(edge[0]), self.mininet.getNodeByName(edge[1])
-            if (self.nx_topo.nx_graph.has_edge(edge[0], edge[1])):
-                self.nx_topo.nx_graph.remove_edge(edge[0], edge[1])
-                if not is_connected(self.nx_topo.nx_graph):
+                edge = random.sample(set([tuple(e) for e in self.nx_topo.base_nx_graph.edges]), 1)
+                n1, n2 = self.mininet.getNodeByName(edge[0]), self.mininet.getNodeByName(edge[1])
+                if (self.nx_topo.nx_graph.has_edge(edge[0], edge[1])):
+                    self.nx_topo.nx_graph.remove_edge(edge[0], edge[1])
+                    if not is_connected(self.nx_topo.nx_graph):
+                        self.nx_topo.nx_graph.add_edge(edge[0], edge[1])
+                        continue
+                    else:
+                        logger.debug(f"bringing down link between {n1} and {n2}")
+                        self.mininet.configLinkStatus(n1, n2, "down")
+                        assert not any([link.intf1.isUp() or link.intf2.isUp() for link in self.mininet.linksBetween(n1, n2)])
+                else:                    
+                    logger.debug(f"bringing up link between {n1} and {n2}")
                     self.nx_topo.nx_graph.add_edge(edge[0], edge[1])
-                    continue
-                else:
-                    logger.debug(f"bringing down link between {n1} and {n2}")
-                    self.mininet.configLinkStatus(n1, n2, "down")
-                    assert not any([link.intf1.isUp() or link.intf2.isUp() for link in self.mininet.linksBetween(n1, n2)])
-            else:                    
-                logger.debug(f"bringing up link between {n1} and {n2}")
-                self.nx_topo.nx_graph.add_edge(edge[0], edge[1])
-                self.mininet.configLinkStatus(n1, n2, "up")
-                assert all([link.intf1.isUp() and link.intf2.isUp() for link in self.mininet.linksBetween(n1, n2)])
-        logger.debug("finish running topology control.")
+                    self.mininet.configLinkStatus(n1, n2, "up")
+                    assert all([link.intf1.isUp() and link.intf2.isUp() for link in self.mininet.linksBetween(n1, n2)])
+            logger.debug("finish running topology control.")
+        except Exception as e:
+            logger.error(e, exc_info=True)
+            raise e
     def kill(self):                    
         logger.debug(f"kill switch flipped; terminating topology simulation")
         self.kill_signal = True

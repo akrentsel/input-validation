@@ -24,9 +24,9 @@ import logging
 logger = logging.getLogger("telemetry_collection")
 class TelemetryLogStruct():
     MIN_WRITE_LEN = 500
-    def __init__(self, log_dir:Path, log_prefix:str, max_rows):
+    def __init__(self, log_dir:str, log_prefix:str, max_rows):
         self.num_entries = 0
-        self.log_dir = log_dir
+        self.log_dir = Path(log_dir)
         self.log_prefix = log_prefix
         self.file_counter = 0
         self.max_rows = max_rows
@@ -131,12 +131,14 @@ class TelemetryLogStruct():
         return self.log_dir / f"{self.log_prefix}_{file_idx}.csv" if not aggregated else self.log_dir / f"{self.log_prefix}_aggregated.csv"
 
     def write_to_disk(self, path:Path, idx_before:int=-1, force=True)->bool:
-        logger.debug(f"writing to disk: {path}")
         # idx_before = self.get_idx_before(timestamp_before)
         if idx_before == -1:
             idx_before = len(self.timestamp_list)
         if (idx_before < TelemetryLogStruct.MIN_WRITE_LEN - 1 and not force):
             return False
+        
+        logger.debug(f"writing to disk: {path}")
+
         df_dict = {"timestamp": self.timestamp_list[:idx_before], "router_name": self.router_name_list[:idx_before], "telemetry_type":self.telemetry_type_list[:idx_before], "interface_name": self.interface_name_list[:idx_before], "counter_direction": self.direction_list[:idx_before], "counter_type": self.counter_type_list[:idx_before], "counter_val": self.counter_val_list[:idx_before]}
         for dict_list in [self.info_dict_list, self.match_dict_list, self.action_dict_list]:
             for k, v in dict_list.items():
@@ -159,15 +161,15 @@ class TelemetryLogStruct():
         return True
 
 
-    async def append_logs(self, log_struct_list:Collection[Union[CounterStruct, StatusStruct, FlowStruct]]):
+    def append_logs(self, log_struct_list:Collection[Union[CounterStruct, StatusStruct, FlowStruct]]):
         for struct in log_struct_list:
             if (isinstance(struct, CounterStruct)):
-                self.append_counter(struct)
+                self._append_counter(struct)
             elif isinstance(struct, StatusStruct):
-                self.append_status(struct)
+                self._append_status(struct)
             else:
                 assert isinstance(struct, FlowStruct)
-                self.append_flow(struct)
+                self._append_flow(struct)
 
-        if self.write_to_disk(self.get_log_path(self.file_counter, False)):
+        if self.write_to_disk(self.get_log_path(self.file_counter, False), force=False):
             self.file_counter += 1

@@ -19,20 +19,20 @@ from concurrent.futures import ThreadPoolExecutor, wait
 import logging
 
 logger = logging.getLogger("telemetry_collection")
-class TelemetryStruct():
+class TelemetryStruct(object):
     def __init__(self, timestamp:float, switch_name:str):
         self.timestamp = timestamp
         self.switch_name = switch_name
 
     def _delay(self, new_timestamp):
         new_copy = self._copy()
-        assert new_timestamp > self.timestamp
+        assert new_timestamp > self.timestamp, f"new timestamp {new_timestamp} must be greater than current timestamp {self.timestamp}"
         new_copy.timestamp = new_timestamp
         return new_copy
 
 class CounterStruct(TelemetryStruct):
     def __init__(self, timestamp:float, switch_name:str, interface_name:str, dir:str, stat_type:str, value:int):
-        super(self, CounterStruct).__init__(timestamp, switch_name)
+        super(CounterStruct, self).__init__(timestamp, switch_name)
         self.interface_name = interface_name
         self.dir = dir
         self.stat_type = stat_type
@@ -59,7 +59,7 @@ class CounterStruct(TelemetryStruct):
 
 class StatusStruct(TelemetryStruct):
     def __init__(self, timestamp:float, switch_name:str, interface_name:str, status:bool):
-        super(self, StatusStruct).__init__(timestamp, switch_name)
+        super(StatusStruct, self).__init__(timestamp, switch_name)
         self.interface_name = interface_name
         self.status = status
 
@@ -78,11 +78,12 @@ class StatusStruct(TelemetryStruct):
 
 class FlowStruct(TelemetryStruct):
     def __init__(self, timestamp:float, switch_name:str, flow_cli_output:str):
-        super(self, FlowStruct).__init__(timestamp, switch_name)
+        super(FlowStruct, self).__init__(timestamp, switch_name)
         self.match_entries = {}
         self.action_entries = {}
         self.info_entries = {}
         self.original = flow_cli_output
+        logger.error(flow_cli_output)
 
         ofp_parsing:dict = json.loads(json.dumps(OFPFlow(flow_cli_output).dict(), indent=4, cls=FlowEncoder))
         if "match" in ofp_parsing:

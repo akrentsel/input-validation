@@ -39,27 +39,28 @@ class SwitchTelemetryManager():
         self.next_counter_collection = -1
         self.next_status_collection = -1
         self.next_flow_collection = -1
+        self.error_generation_control_block = telemetry_control_block.error_generation_control_block
 
         self.delay_list = []
         self.delay_end_time = -1
 
     def run(self):
         timestamp = self.telemetry_control_block.experiment_control_block.get_experiment_timestamp()
-        self.next_counter_collection = random.randint(timestamp, self.collection_interval)
-        self.next_flow_collection = random.randint(timestamp, self.collection_interval)
-        self.next_status_collection = random.randint(timestamp, self.collection_interval)
+        self.next_counter_collection = random.random() * self.collection_interval + timestamp 
+        self.next_flow_collection = random.random() * self.collection_interval + timestamp 
+        self.next_status_collection = random.random() * self.collection_interval + timestamp 
 
         time.sleep(max(0, self.next_counter_collection - timestamp, self.next_flow_collection - timestamp, self.next_status_collection - timestamp))
 
         while not self.telemetry_control_block.kill_signal:
             timestamp = self.telemetry_control_block.experiment_control_block.get_experiment_timestamp()
-            if (timestamp < self.next_counter_collection):
+            if (timestamp >= self.next_counter_collection):
                 self.push_logs(self.collect_counters())
                 self.next_counter_collection += self.collection_interval
-            if (timestamp < self.next_flow_collection):
+            if (timestamp >= self.next_flow_collection):
                 self.push_logs(self.collect_flows())
                 self.next_flow_collection += self.collection_interval
-            if (timestamp < self.next_status_collection):
+            if (timestamp >= self.next_status_collection):
                 self.push_logs(self.collect_statuses())
                 self.next_status_collection += self.collection_interval
 
@@ -113,10 +114,7 @@ class SwitchTelemetryManager():
             # Match port line
             port_match = re.search(port_pattern, line)
             if port_match:
-                current_port = port_match.group(1).strip('"')  # Remove quotes from port name if any
-                if "-" in current_port:
-                    current_port = current_port.split("-")[1]  # Remove the switch prefix if it exists
-                parsed_data[current_port] = {"rx": {}, "tx": {}}
+                current_port = port_match.group(1).strip('"')
 
             if current_port is not None:
                 # Match the RX line
@@ -158,14 +156,15 @@ class SwitchTelemetryManager():
     def collect_statuses(self):
         status_entry_list = []
         timestamp = self.telemetry_control_block.experiment_control_block.get_experiment_timestamp()
-        for iface in self.switch.intfs:
+        for iface in self.switch.intfs.values():
             status_entry_list.append(StatusStruct(timestamp, self.switch.name, iface.name, iface.isUp()))
 
         logger.debug(f"switch {self.switch.name}: collecting {len(status_entry_list)} statuses at time {timestamp}")
         return status_entry_list
 
 
-    async def push_logs(self, log_struct_list:Collection[Union[CounterStruct, StatusStruct, FlowStruct]]):
+    def push_logs(self, log_struct_list:Collection[Union[CounterStruct, StatusStruct, FlowStruct]]):
+        logger.debug(f"pushing {len(log_struct_list)} logs for {self.switch.name}")
         self.base_log_struct.append_logs(log_struct_list)
         corrupt_append_list = []
         num_drops = 0
@@ -174,25 +173,25 @@ class SwitchTelemetryManager():
         num_zeros = 0
         num_delays = 0
         for log_struct in log_struct_list:
-            error_codes = self.error_generation_control_block.pick_error_codes(type(log_struct))
+            error_codes = self.telemetry_control_block.error_generation_control_block.pick_error_codes(type(log_struct))
         
-            if (ErrorGenerationControlBlock.DROP_CODE in error_codes):
+            if (self.error_generation_control_block.DROP_CODE in error_codes):
                 num_drops += 1
                 continue
             corrupt_log_struct = log_struct
-            if (ErrorGenerationControlBlock.COUNTER_SPIKE_CODE in error_codes):
+            if (self.error_generation_control_block.COUNTER_SPIKE_CODE in error_codes):
                 num_spikes += 1
-                corrupt_log_struct = log_struct._multiply(ErrorGenerationControlBlock.pick_spike_factor())
-            elif (ErrorGenerationControlBlock.STATUS_FLIP_CODE in error_codes):
+                corrupt_log_struct = log_struct._multiply(self.error_generation_control_block.pick_spike_factor())
+            elif (self.error_generation_control_block.STATUS_FLIP_CODE in error_codes):
                 num_status_flips += 1
                 corrupt_log_struct = log_struct._flip()
-            elif (ErrorGenerationControlBlock.COUNTER_ZERO_CODE in error_codes):
+            elif (self.error_generation_control_block.COUNTER_ZERO_CODE in error_codes):
                 num_zeros += 1
                 corrupt_log_struct = log_struct._zero()
             
             delay_this = False
-            if (ErrorGenerationControlBlock.DELAY_CODE in error_codes):
-                new_time = corrupt_log_struct.timestamp + ErrorGenerationControlBlock.pick_delay()
+            if (self.error_generation_control_block.DELAY_CODE in error_codes):
+                new_time = corrupt_log_struct.timestamp + self.error_generation_control_block.pick_delay()
 
                 corrupt_log_struct = corrupt_log_struct._delay(new_time)
 
@@ -201,7 +200,8 @@ class SwitchTelemetryManager():
                 delay_this = True
 
             if (corrupt_log_struct.timestamp <= self.delay_end_time and self.delay_end_time > 0):
-                corrupt_log_struct = corrupt_log_struct._delay(self.delay_end_time)
+                if (corrupt_log_struct.timestamp < self.delay_end_time):
+                    corrupt_log_struct = corrupt_log_struct._delay(self.delay_end_time)
                 delay_this = True
 
             if delay_this:

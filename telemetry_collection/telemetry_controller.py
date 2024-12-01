@@ -26,7 +26,7 @@ from telemetry_collection.telemetry_config import ErrorGenerationConfig, Telemet
 import logging 
 
 logger = logging.getLogger("telemetry_collection")
-class ErrorGenerationControlBlock():
+class ErrorGenerationControlBlock(object):
     DROP_CODE = 0
     COUNTER_SPIKE_CODE = 1
     STATUS_FLIP_CODE = 2
@@ -41,9 +41,9 @@ class ErrorGenerationControlBlock():
         if telemetry_type == CounterStruct:
             picks[ErrorGenerationControlBlock.STATUS_FLIP_CODE] = 1
         if telemetry_type == StatusStruct:
-            picks[ErrorGenerationControlBlock.COUNTER_SPIKE_CODE, ErrorGenerationControlBlock.COUNTER_ZERO_CODE] = 1
+            picks[[ErrorGenerationControlBlock.COUNTER_SPIKE_CODE, ErrorGenerationControlBlock.COUNTER_ZERO_CODE]] = 1
         if telemetry_type == FlowStruct:
-            picks[ErrorGenerationControlBlock.STATUS_FLIP_CODE, ErrorGenerationControlBlock.COUNTER_SPIKE_CODE, ErrorGenerationControlBlock.COUNTER_ZERO_CODE] = 1
+            picks[[ErrorGenerationControlBlock.STATUS_FLIP_CODE, ErrorGenerationControlBlock.COUNTER_SPIKE_CODE, ErrorGenerationControlBlock.COUNTER_ZERO_CODE]] = 1
 
         selected = list(np.where(picks < np.array([self.config.drop_prob, self.config.counter_spike_prob, self.config.status_flip_prob, self.config.counter_zero_prob, self.config.delay_prob]))[0])
         picks[picks >= np.array([self.config.drop_prob, self.config.counter_spike_prob, self.config.status_flip_prob, self.config.counter_zero_prob, self.config.delay_prob])] = 1
@@ -76,12 +76,14 @@ class ErrorGenerationControlBlock():
 
 
 class TelemetryControlBlock():
-    def __init__(self, mininet:Mininet, experiment_control_block:ExperimentControlBlock, telemetry_config:TelemetryConfig):
+    def __init__(self, mininet:Mininet, experiment_control_block:ExperimentControlBlock, telemetry_config:TelemetryConfig, error_generation_config: ErrorGenerationConfig):
         self.switch_manager_map:dict = {}
-        self.switch_list:Collection[Host] = list(mininet.switches)
+        self.switch_list:Collection[Switch] = list(mininet.switches)
         self.kill_signal:bool = False # TODO: implement graceful termination...
         self.config = telemetry_config
         self.experiment_control_block:ExperimentControlBlock = experiment_control_block
+        self.thread_executor:ThreadPoolExecutor = ThreadPoolExecutor(max_workers = 3 * len(self.switch_list))
+        self.error_generation_control_block = ErrorGenerationControlBlock(error_generation_config)
 
         Path(self.config.base_log_dir).mkdir(exist_ok=False)
         if (Path(self.config.base_log_dir) != Path(self.config.error_log_dir)):
@@ -91,31 +93,34 @@ class TelemetryControlBlock():
             self.switch_manager_map[switch.name] = SwitchTelemetryManager(switch, self, self.config)
 
     def run_simulation(self, conn:Connection):
-        logger.debug("starting telemetry simulation")
-        futures = []
-        for host in self.switch_list:
-            futures.append(self.thread_executor.submit(self.host_manager_map[host].run))
-        
-        while not conn.poll():
-            (done_futures, notdone_futures) = wait(futures, return_when="FIRST_EXCEPTION", timeout=2)
+        try:
+            logger.debug("starting telemetry simulation")
+            futures = []
+            for switch in self.switch_list:
+                futures.append(self.thread_executor.submit(self.switch_manager_map[switch.name].run))
+            
+            while not conn.poll():
+                (done_futures, notdone_futures) = wait(futures, return_when="FIRST_EXCEPTION", timeout=2)
+
+                for future in done_futures:
+                    exception = future.exception()
+                    if (exception is not None):
+                        raise exception
+            
+            if conn.poll():
+                self.kill_signal = True
+
+            (done_futures, notdone_futures) = wait(futures, return_when="FIRST_EXCEPTION")
 
             for future in done_futures:
                 exception = future.exception()
                 if (exception is not None):
                     raise exception
-        
-        if conn.poll():
-            self.kill_signal = True
-
-        (done_futures, notdone_futures) = wait(futures, return_when="FIRST_EXCEPTION")
-
-        for future in done_futures:
-            exception = future.exception()
-            if (exception is not None):
-                raise exception
-            
-        logger.debug("finished telemetry simulation")
-
+                
+            logger.debug("finished telemetry simulation")
+        except Exception as e:
+            logger.error(e, exc_info=True)
+            raise e
     def signal_terminate(self):
         logger.debug("kill switch flipped; terminating telemetry simulation")
         self.kill_signal = True

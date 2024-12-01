@@ -76,8 +76,9 @@ if __name__ == "__main__":
 
     network_topo = NetworkXTopo.construct_nx_topo_from_config(topology_config)
     mininet = Mininet(network_topo, switch=OVSSwitch, controller=RemoteController)
+    mininet.start()
     topology_controller = TopologyControlBlock(network_topo, mininet, network_event_config, topology_config)
-    telemetry_controller = TelemetryControlBlock(mininet, experiment_config, telemetry_config)
+    telemetry_controller = TelemetryControlBlock(mininet, experiment_controller, telemetry_config, error_generation_config)
     traffic_generation_controller = TrafficControlBlock(mininet, traffic_generation_config)
 
     logger.info("experiment starting.")
@@ -93,21 +94,38 @@ if __name__ == "__main__":
         return traffic_generation_controller.run_simulation(conn)
 
     with Pool(processes=3) as pool:
+        early_abort = False
+        
         def err_callback(err):
+            logger.error("EARLY ABORT DETECTED. ABORTING.")
             pool.terminate()
+            early_abort = True
             raise err
         
         (topo_snd, topo_rcv) = Pipe()
         (telemetry_snd, telemetry_rcv) = Pipe()
         (traffic_snd, traffic_rcv) = Pipe()
-        proc_results.append(pool.apply_async(run_topology, [topo_rcv], error_callback=err_callback))
+        # proc_results.append(pool.apply_async(run_topology, [topo_rcv], error_callback=err_callback))
         proc_results.append(pool.apply_async(run_telemetry, [telemetry_rcv], error_callback=err_callback))
-        proc_results.append(pool.apply_async(run_traffic, [traffic_rcv], error_callback=err_callback))
+        # proc_results.append(pool.apply_async(run_traffic, [traffic_rcv], error_callback=err_callback))
 
-        time.sleep(experiment_config.experiment_time_mins*60)
+
+        # proc_results.append(pool.apply(run_topology, [topo_rcv]))
+        # proc_results.append(pool.apply(run_telemetry, [telemetry_rcv]))
+        # proc_results.append(pool.apply(run_traffic, [traffic_rcv]))
+
+        t = 0
+        while t < experiment_config.experiment_time_mins*60:
+            if early_abort:
+                raise RuntimeError("some processes have errored. Aborting.")
+            else:
+                time.sleep(5)
+                t += 5
+
         topo_snd.send(0)
         telemetry_snd.send(0)
         traffic_snd.send(0)
+
         logger.info("waiting on processes.")
         for future in proc_results:
             future.get()
