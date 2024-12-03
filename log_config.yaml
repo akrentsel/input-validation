@@ -16,29 +16,43 @@ handlers:
     level: NOTSET
     formatter: verbose_multithread
     stream: ext://sys.stdout
-  # telemetry_file:  
-  #   class : logging.handlers.FileHandler
-  #   formatter: precise
-  #   filename: 
-  #   maxBytes: 1024
-  #   backupCount: 3
+  experiment_main_file:  
+    class : logging.FileHandler
+    filename: /home/mininet/experiment-out/experiment_main_logging.txt
+    mode: "a"
+    formatter: verbose_multithread
+  telemetry_file:  
+    class : logging.FileHandler
+    filename: /home/mininet/experiment-out/telemetry_logging.txt
+    mode: "a"
+    formatter: verbose_multithread
+  topology_file:  
+    class : logging.FileHandler
+    filename: /home/mininet/experiment-out/topology_logging.txt
+    mode: "a"
+    formatter: verbose_multithread
+  traffic_generation_file:  
+    class : logging.FileHandler
+    filename: /home/mininet/experiment-out/traffic_generation_logging.txt
+    mode: "a"
+    formatter: verbose_multithread
   
 loggers:
   experiment_main:
     level: DEBUG
-    handlers: [console]
+    handlers: [console, experiment_main_file]
     propagate: no
   telemetry_collection:
     level: DEBUG
-    handlers: [console]
+    handlers: [console, telemetry_file]
     propagate: no
   topology:
     level: DEBUG
-    handlers: [console]
+    handlers: [console, topology_file]
     propagate: no
   traffic_generation:
     level: DEBUG
-    handlers: [console]
+    handlers: [console, traffic_generation_file]
     propagate: no
 root:
   level: NOTSET

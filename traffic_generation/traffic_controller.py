@@ -36,7 +36,7 @@ class TrafficControlBlock():
             logger.debug(f"running traffic simulation")
             futures = []
             for host in self.host_list:
-                futures.append(self.thread_executor.submit(self.host_manager_map[host].run, 2*self.host_manager_map[host].flow_duration_distribution()))
+                futures.append(self.thread_executor.submit(self.host_manager_map[host].run))
 
             while not conn.poll():
                 (done_futures, notdone_futures) = wait(futures, return_when="FIRST_EXCEPTION", timeout=2)

@@ -4,7 +4,7 @@ class NetworkEventConfig(BaseModel):
     event_interrarival_mean: int =  60
 
 class TopologyConfig(BaseModel):
-    logging_dir: str
+    # logging_dir: str
     use_bw_delay:bool = False
     
     naive_link_bw:int = 1e5

@@ -11,10 +11,11 @@ class ErrorGenerationConfig(BaseModel):
     delay_min:float = 20
 
 class TelemetryConfig(BaseModel):
-    logging_dir: str
+    # logging_dir: str
     base_log_dir: str
     error_log_dir: str
     collection_interval: float
     base_log_prefix: str
     error_log_prefix: str
     max_rows: int
+    ignore_bad_flow_parsing:bool = False

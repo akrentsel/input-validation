@@ -30,7 +30,7 @@ class NetworkXTopo(Topo):
 
         for node in graph.nodes:
             logger.debug(f"adding switch {'s'+str(node)}")
-            s = self.addSwitch('s'+str(node), **{k: v for k, v in graph.nodes[node].items() if k not in ['id', 'name']})
+            s = self.addSwitch('s'+str(node), **{k: v for k, v in graph.nodes[node].items() if k not in ['id', 'name']}, protocols="OpenFlow13")
             self.mn_nx_name_map['s'+str(node)] = node
             self.nx_mn_name_map[node] = 's'+str(node)
 

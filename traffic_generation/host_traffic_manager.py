@@ -32,6 +32,7 @@ class HostTrafficManager():
         self.flows_per_host = traffic_generation_config.flows_per_host
         self.flow_bandwidth_distribution = lambda: max(traffic_generation_config.flow_bandwidth_min, np.random.normal(traffic_generation_config.flow_bandwidth_mean, traffic_generation_config.flow_bandwidth_var))
         self.flow_duration_distribution = lambda: max(traffic_generation_config.flow_duration_min, np.random.normal(traffic_generation_config.flow_duration_mean, traffic_generation_config.flow_duration_var))
+        self.error_on_stream_failure = traffic_generation_config.error_on_stream_failure
         self.traffic_control_block = traffic_control_block
         self.host:Host = host
         self.nontruant_iperf_stream_list:Collection[IperfStream] = SortedList(key=lambda stream: stream.expire_time) # maps unix timestamp to stream by expiration time
@@ -42,7 +43,7 @@ class HostTrafficManager():
         #ASSUMPTION: lock has been acquired by us (there isn't a official way of checking if we have the lock, fuck python)
         logger.debug(f"creating stream between {self.host} and {dst} with duration {duration}, bandwidth {bw}")
         iperf_popen = self.host.popen(f"iperf -c {dst.IP()} -t {duration} -b {bw}M")
-        self.nontruant_iperf_stream_list.append(IperfStream(self.host, dst, iperf_popen, bw, duration))
+        self.nontruant_iperf_stream_list.add(IperfStream(self.host, dst, iperf_popen, bw, duration))
 
     def run(self):
         # I know this "while True" structure may seem inefficient, BUT:
@@ -55,20 +56,27 @@ class HostTrafficManager():
         # PS: yes, I know about asyncio, but that doesnt seem to work here
         #     b/c cannot just use create_subprocess_shell as we need to 
         #     run them within the mininet cli, not a general shell
+        time.sleep(2*self.flow_duration_distribution())
         while not self.traffic_control_block.kill_signal: 
             while len(self.nontruant_iperf_stream_list) > 0 and self.nontruant_iperf_stream_list[0].expire_time < time.time():
                 first_stream = self.nontruant_iperf_stream_list.pop()
-                self.trunant_iperf_stream_list.append(first_stream)
+                self.truant_iperf_stream_list.add(first_stream)
 
             rm_indices = []
             for idx, iperf_stream in enumerate(self.truant_iperf_stream_list):
-                if iperf_stream.popen.poll():
+                if iperf_stream.popen.poll() is not None:
                     (_, stderr_data) = iperf_stream.popen.communicate()
                     if not iperf_client_successful(stderr_data):
-                        raise RuntimeError(f"Failed to create iperf client from host {self.host} to {iperf_stream.dst}. Is your mininet topology actually valid?")
+                        error_msg = f"Failed to create iperf client from host {self.host} to {iperf_stream.dst}; Logger error {stderr_data}. Is your mininet topology actually valid, and did you start your controller?"
+                        if self.error_on_stream_failure:
+                            raise RuntimeError(error_msg)
+                        else:
+                            logger.error(error_msg)
                     rm_indices.append(idx)
                 else:
                     iperf_stream.retry_cnt += 1
+                    if time.time() - iperf_stream.expire_time > 10:
+                        logger.warning(f"stream from {iperf_stream.src} to {iperf_stream.dst} has gone severely overtime (by {time.time() - iperf_stream.expire_time} secs)")
                     
             # begin critical section; we need to check/update against total bandwidth and flow count
             self.traffic_control_block.lock.acquire()
@@ -90,15 +98,15 @@ class HostTrafficManager():
                 self.traffic_control_block.total_bw += bw
                 self.traffic_control_block.total_streams += 1
                 duration = self.flow_duration_distribution()
-                streams_to_create_args.append((next_host, bw, duration))
+                streams_to_create_args.append((self, next_host, bw, duration))
 
             self.traffic_control_block.lock.release()
             # end critical section
 
             for stream_arg in streams_to_create_args:
-                self.create_stream(self, *stream_arg)
+                HostTrafficManager.create_stream(*stream_arg)
 
-            next_sleep_time = max(.5, min(map(lambda stream: stream.expire_time - time.time(), self.nontruant_iperf_stream_list)))
+            next_sleep_time = max(.5, min(map(lambda stream: stream.expire_time - time.time(), self.nontruant_iperf_stream_list)) if len(self.nontruant_iperf_stream_list) > 0 else 0)
 
 
             # TODO: right now exponential backoff is fucked; if we are polling for statuses of two old subprocesses w/ backoff 10s and new incoming one arrives w/ backoff .5s, we wait for the minimum time among all 3 (which is .5s).

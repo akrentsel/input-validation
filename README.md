@@ -1,3 +1,39 @@
 # Input Validation
 
 Codebase for exploring feasibility of input validation.
+
+## How to run:
+1. Modify configuration files `log_config.yaml` and `experiment_config.yaml` as needed
+2. Start ONOS controller:
+    1. SSH into mininet VM, open CLI window and run `cd ~/onos; bazel run onos-local debug`; wait for a status message of the form `Updated node 127.0.0.1 state to READY` before proceeding.
+    2. SSH into in mininet VM, open another CLI window and `cd ~/onos; ./tools/test/bin/onos localhost`; this should open an ONOS CLI interface.
+3. Configure ONOS controller, open its topology GUI view, and enable openflow/routing applications: 
+    1. In mininet VM CLI, run `ifconfig -a` to get the IP address for host-only interface; in browser of choice (can be on host computer), go to `<ip address>:8181` and login with credentials: username=`onos`, password=`rocks`; the network topology can be viewed in a GUI by going to the `Topology` tab in the dropdown menu.
+    2. In the ONOS CLI interface, run the following:
+        ```
+        app activate org.onosproject.openflow
+        app activate org.onosproject.ofagent
+        app activate org.onosproject.reactive-routing
+        app activate org.onosproject.fibinstaller
+        app activate org.onosproject.fwd
+        ```
+
+        by doing this, we activate the following applications:
+        - `org.onosproject.openflow` (needed for processing OpenFlow messages)
+        - `org.onosproject.ofagent` (i'm not sure what this does)
+        - `org.onosproject.reactive-routing` (needed for using IP-based flow routing)
+        - `org.onosproject.fibinstaller` (i'm not sure what this does)
+        - `org.onosproject.fwd` (needed for installing flow tables / flow programming)
+    3. In the ONOS CLI interface from 2.(2), run the following:
+        ```
+        cfg set org.onosproject.fwd.ReactiveForwarding ipv6Forwarding true
+        cfg set org.onosproject.fwd.ReactiveForwarding matchIcmpFields true
+        cfg set org.onosproject.fwd.ReactiveForwarding matchIpv4Address true
+        cfg set org.onosproject.fwd.ReactiveForwarding matchIpv4Dscp true
+        cfg set org.onosproject.fwd.ReactiveForwarding matchIpv6Address true
+        cfg set org.onosproject.fwd.ReactiveForwarding matchIpv6FlowLabel true
+        cfg set org.onosproject.fwd.ReactiveForwarding matchTcpUdpPorts true
+        ```
+4. Run the experiment: `cd ~/input-validation; sudo python experiment_main.py`.
+    - If needed, clear the directory where experiment outputs are stored, and reset the mininet environment with `sudo mn -c`
+    - 

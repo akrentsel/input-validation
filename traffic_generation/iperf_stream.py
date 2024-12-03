@@ -18,4 +18,4 @@ class IperfStream():
         self.retry_cnt:int = 0 # we use this in HostTrafficManager.run() to implement exponential backoff for determining when to recheck statuses
 
 def iperf_client_successful(msg:str) -> bool:
-    return "connect failed" not in msg
+    return "connect failed" not in str(msg)

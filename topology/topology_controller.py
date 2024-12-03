@@ -53,21 +53,23 @@ class TopologyControlBlock():
             while not conn.poll():
                 time.sleep(self.event_interarrival_fn())
 
-                edge = random.sample(set([tuple(e) for e in self.nx_topo.base_nx_graph.edges]), 1)
-                n1, n2 = self.mininet.getNodeByName(edge[0]), self.mininet.getNodeByName(edge[1])
+                edge = random.sample(list(set([tuple(e) for e in self.nx_topo.base_nx_graph.edges])), 1)[0]
+                mn_name1, mn_name2 = self.nx_topo.nx_mn_name_map[edge[0]], self.nx_topo.nx_mn_name_map[edge[1]]
+                n1, n2 = self.mininet.getNodeByName(mn_name1), self.mininet.getNodeByName(mn_name2)
                 if (self.nx_topo.nx_graph.has_edge(edge[0], edge[1])):
                     self.nx_topo.nx_graph.remove_edge(edge[0], edge[1])
                     if not is_connected(self.nx_topo.nx_graph):
                         self.nx_topo.nx_graph.add_edge(edge[0], edge[1])
+                        logger.debug(f"attempted to bring down link between {n1} and {n2}, but graph would be disconnected. did not do it.")
                         continue
                     else:
                         logger.debug(f"bringing down link between {n1} and {n2}")
-                        self.mininet.configLinkStatus(n1, n2, "down")
+                        self.mininet.configLinkStatus(mn_name1, mn_name2, "down")
                         assert not any([link.intf1.isUp() or link.intf2.isUp() for link in self.mininet.linksBetween(n1, n2)])
                 else:                    
                     logger.debug(f"bringing up link between {n1} and {n2}")
                     self.nx_topo.nx_graph.add_edge(edge[0], edge[1])
-                    self.mininet.configLinkStatus(n1, n2, "up")
+                    self.mininet.configLinkStatus(mn_name1, mn_name2, "up")
                     assert all([link.intf1.isUp() and link.intf2.isUp() for link in self.mininet.linksBetween(n1, n2)])
             logger.debug("finish running topology control.")
         except Exception as e:

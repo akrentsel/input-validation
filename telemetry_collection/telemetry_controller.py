@@ -6,7 +6,7 @@ from mininet.net import Mininet
 from collections.abc import Collection
 from asyncio import get_event_loop
 import json
-from asyncio import Lock
+from threading import Lock
 from pathlib import Path
 import numpy as np
 import asyncio
@@ -16,12 +16,12 @@ import pandas as pd
 import random
 import re
 import time
-from concurrent.futures import ThreadPoolExecutor, wait
+from concurrent.futures import Future, ThreadPoolExecutor, wait
 import logging
 
 from telemetry_collection.telemetry_structs import CounterStruct, FlowStruct, StatusStruct
 from telemetry_collection.switch_telemetry_manager import SwitchTelemetryManager
-from experiment import ExperimentControlBlock
+from experiment_controller import ExperimentControlBlock
 from telemetry_collection.telemetry_config import ErrorGenerationConfig, TelemetryConfig
 import logging 
 
@@ -85,6 +85,10 @@ class TelemetryControlBlock():
         self.thread_executor:ThreadPoolExecutor = ThreadPoolExecutor(max_workers = 3 * len(self.switch_list))
         self.error_generation_control_block = ErrorGenerationControlBlock(error_generation_config)
 
+        self.io_thread_executor:ThreadPoolExecutor = ThreadPoolExecutor(max_workers = 3 * len(self.switch_list))
+        self.lock = Lock()
+        self.io_thread_futures:Collection[Future] = []
+
         Path(self.config.base_log_dir).mkdir(exist_ok=False)
         if (Path(self.config.base_log_dir) != Path(self.config.error_log_dir)):
             Path(self.config.error_log_dir).mkdir(exist_ok=False)
@@ -106,6 +110,18 @@ class TelemetryControlBlock():
                     exception = future.exception()
                     if (exception is not None):
                         raise exception
+                    
+                self.lock.acquire()
+                new_io_future_list = []
+                for io_future in self.io_thread_futures:
+                    if not io_future.done():
+                        new_io_future_list.append(io_future)
+                        continue
+                    io_exception = io_future.exception()
+                    if io_exception is not None:
+                        raise io_exception
+                self.io_thread_futures = new_io_future_list
+                self.lock.release()
             
             if conn.poll():
                 self.kill_signal = True
@@ -116,6 +132,13 @@ class TelemetryControlBlock():
                 exception = future.exception()
                 if (exception is not None):
                     raise exception
+                
+            (done_io_futures, notdone_io_futures) = wait(self.io_thread_futures, return_when="FIRST_EXCEPTION")
+
+            for io_future in done_io_futures:
+                io_exception = io_future.exception()
+                if (io_future.exception() is not None):
+                    raise io_exception
                 
             logger.debug("finished telemetry simulation")
         except Exception as e:

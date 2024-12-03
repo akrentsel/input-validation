@@ -21,6 +21,7 @@ from mininet.net import Mininet
 from mininet.node import OVSSwitch, RemoteController
 import os
 
+from experiment_controller import ExperimentControlBlock
 from experiment_config import ExperimentConfig
 from telemetry_collection.telemetry_config import ErrorGenerationConfig, TelemetryConfig
 from telemetry_collection.telemetry_controller import TelemetryControlBlock
@@ -31,15 +32,6 @@ from traffic_generation.traffic_controller import TrafficControlBlock
 from traffic_generation.traffic_generation_config import TrafficGenerationConfig
 
 logger = logging.getLogger("experiment_main")
-class ExperimentControlBlock():
-    def __init__(self, config_doc:dict):
-        self.start_time = time.time()
-
-
-    def get_experiment_timestamp(self):
-        return time.time() - self.start_time
-
-
 
 if __name__ == "__main__":
     if os.geteuid() != 0:
@@ -59,8 +51,8 @@ if __name__ == "__main__":
     experiment_config = ExperimentConfig(**config_doc['experiment_config'])
     start_time = time.time()
 
-    for path in [Path(telemetry_config.logging_dir), Path(topology_config.logging_dir), Path(traffic_generation_config.logging_dir), Path(experiment_config.logging_dir)]:
-        path.mkdir(exist_ok=True)
+    # for path in [Path(telemetry_config.logging_dir), Path(topology_config.logging_dir), Path(traffic_generation_config.logging_dir), Path(experiment_config.logging_dir)]:
+    #     path.mkdir(exist_ok=True)
 
     if experiment_config.logging_config_filepath is not None:
         log_config = None
@@ -69,13 +61,14 @@ if __name__ == "__main__":
 
         logging.config.dictConfig(log_config)
 
-    logging.getLogger("telemetry_collection").addHandler(FileHandler(Path(telemetry_config.logging_dir) / datetime.now().strftime('telemetry_collection_log_%H_%M_%d_%m_%Y.log')))
-    logging.getLogger("topology").addHandler(FileHandler(Path(topology_config.logging_dir) / datetime.now().strftime('topology_log_%H_%M_%d_%m_%Y.log')))
-    logging.getLogger("traffic_generation").addHandler(FileHandler(Path(traffic_generation_config.logging_dir) / datetime.now().strftime('traffic_generation_log_%H_%M_%d_%m_%Y.log')))
-    logging.getLogger("experiment_main").addHandler(FileHandler(Path(experiment_config.logging_dir) / datetime.now().strftime('experiment_main_log_%H_%M_%d_%m_%Y.log')))
+    # logging.getLogger("telemetry_collection").addHandler(FileHandler(Path(telemetry_config.logging_dir) / datetime.now().strftime('telemetry_collection_log_%H_%M_%d_%m_%Y.log')))
+    # logging.getLogger("topology").addHandler(FileHandler(Path(topology_config.logging_dir) / datetime.now().strftime('topology_log_%H_%M_%d_%m_%Y.log')))
+    # logging.getLogger("traffic_generation").addHandler(FileHandler(Path(traffic_generation_config.logging_dir) / datetime.now().strftime('traffic_generation_log_%H_%M_%d_%m_%Y.log')))
+    # logging.getLogger("experiment_main").addHandler(FileHandler(Path(experiment_config.logging_dir) / datetime.now().strftime('experiment_main_log_%H_%M_%d_%m_%Y.log')))
 
+    controller = RemoteController('c0', ip='127.0.0.1', port=6653, protocols="OpenFlow13")
     network_topo = NetworkXTopo.construct_nx_topo_from_config(topology_config)
-    mininet = Mininet(network_topo, switch=OVSSwitch, controller=RemoteController)
+    mininet = Mininet(network_topo, switch=OVSSwitch, controller=controller)
     mininet.start()
     topology_controller = TopologyControlBlock(network_topo, mininet, network_event_config, topology_config)
     telemetry_controller = TelemetryControlBlock(mininet, experiment_controller, telemetry_config, error_generation_config)
@@ -105,9 +98,9 @@ if __name__ == "__main__":
         (topo_snd, topo_rcv) = Pipe()
         (telemetry_snd, telemetry_rcv) = Pipe()
         (traffic_snd, traffic_rcv) = Pipe()
-        # proc_results.append(pool.apply_async(run_topology, [topo_rcv], error_callback=err_callback))
+        proc_results.append(pool.apply_async(run_topology, [topo_rcv], error_callback=err_callback))
         proc_results.append(pool.apply_async(run_telemetry, [telemetry_rcv], error_callback=err_callback))
-        # proc_results.append(pool.apply_async(run_traffic, [traffic_rcv], error_callback=err_callback))
+        proc_results.append(pool.apply_async(run_traffic, [traffic_rcv], error_callback=err_callback))
 
 
         # proc_results.append(pool.apply(run_topology, [topo_rcv]))

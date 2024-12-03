@@ -33,9 +33,10 @@ class SwitchTelemetryManager():
     def __init__(self, switch:Switch, telemetry_control_block:TelemetryControlBlock, telemetry_config:TelemetryConfig):# switch:Switch, telemetry_control_block:TelemetryControlBlock, base_log_dir:Path, error_log_dir:Path, base_log_name_prefix:str, error_log_name_prefix:str, collection_interval:float=10, max_rows:int=MAX_NUM_ROWS, *kwargs):
         self.telemetry_control_block:TelemetryControlBlock = telemetry_control_block
         self.switch:Switch = switch
-        self.base_log_struct = TelemetryLogStruct(telemetry_config.base_log_dir, f"{telemetry_config.base_log_prefix}_{switch.name}", telemetry_config.max_rows)
-        self.error_log_struct = TelemetryLogStruct(telemetry_config.error_log_dir, f"{telemetry_config.error_log_prefix}_{switch.name}", telemetry_config.max_rows)
+        self.base_log_struct = TelemetryLogStruct(self, telemetry_config.base_log_dir, f"{telemetry_config.base_log_prefix}_{switch.name}", telemetry_config.max_rows)
+        self.error_log_struct = TelemetryLogStruct(self, telemetry_config.error_log_dir, f"{telemetry_config.error_log_prefix}_{switch.name}", telemetry_config.max_rows)
         self.collection_interval = telemetry_config.collection_interval
+        self.ignore_bad_flow_parsing: bool = telemetry_config.ignore_bad_flow_parsing
         self.next_counter_collection = -1
         self.next_status_collection = -1
         self.next_flow_collection = -1
@@ -149,7 +150,15 @@ class SwitchTelemetryManager():
         lines = output.splitlines()
         flow_entry_list = []
         for line in lines:
-            flow_entry_list.append(FlowStruct(timestamp, self.switch.name, line))
+            try:
+                flow_struct = FlowStruct(timestamp, self.switch.name, line)
+                flow_entry_list.append(flow_struct)
+            except Exception as e:
+                if self.ignore_bad_flow_parsing:
+                    logger.error(f"failed to create flow struct from flow line {line}; full flow output causing this is {output}")
+                    continue
+                else:
+                    raise e
         logger.debug(f"switch {self.switch.name}: collecting {len(flow_entry_list)} flows at time {timestamp}")
         return flow_entry_list
 
@@ -222,7 +231,7 @@ class SwitchTelemetryManager():
         self.error_log_struct.append_logs(corrupt_append_list)
 
     def finalize_logs(self):
-        logger.debug(f"switch {self.switch.name}: finalizing logs")
+        logger.debug(f"switch {self.switch.name}: submititing log finalization requests")
         self.error_log_struct.append_logs(self.delay_list)
         self.delay_list = []
         self.delay_end_time = -1

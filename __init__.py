@@ -1,2 +1,2 @@
-from experiment import ExperimentControlBlock
-import experiment
+from experiment_controller import ExperimentControlBlock
+import experiment_controller
