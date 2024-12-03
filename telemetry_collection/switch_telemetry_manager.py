@@ -248,11 +248,11 @@ class SwitchTelemetryManager():
         for i in range(self.base_log_struct.file_counter):
             base_df_list.append(pd.read_csv(self.base_log_struct.get_log_path(i, False)))
 
-        pd.concat(base_df_list, axis=0).to_csv(self.base_log_struct.get_log_path(-1, True), mode='x')
+        pd.concat(base_df_list, axis=0, ignore_index=True).to_csv(self.base_log_struct.get_log_path(-1, True), mode='x')
         base_df_list = []
         error_df_list = []
         for i in range(self.error_log_struct.file_counter):
             error_df_list.append(pd.read_csv(self.error_log_struct.get_log_path(i, False)))
 
-        pd.concat(error_df_list, axis=0).to_csv(self.error_log_struct.get_log_path(-1, True), mode='x')
+        pd.concat(error_df_list, axis=0, ignore_index=True).to_csv(self.error_log_struct.get_log_path(-1, True), mode='x')
         error_df_list = []

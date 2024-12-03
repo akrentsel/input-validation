@@ -140,7 +140,9 @@ class TelemetryControlBlock():
                 if (io_future.exception() is not None):
                     raise io_exception
                 
-            logger.debug("finished telemetry simulation")
+            logger.debug("finished telemetry simulation; collating logs")
+            self.collate_logs()
+            logger.debug("finished collating telemetry simulation logs.")
         except Exception as e:
             logger.error(e, exc_info=True)
             raise e
