@@ -1,3 +1,6 @@
+"""
+Struct to hold configuration parameters, to pass to topology controller.
+"""
 from pathlib import Path
 from pydantic import BaseModel
 class NetworkEventConfig(BaseModel):

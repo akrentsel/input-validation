@@ -1,14 +1,6 @@
-# from telemetry_collection.switch_telemetry_manager import *
-# from telemetry_collection.telemetry_controller import *
-# from telemetry_collection.telemetry_logging import *
-# from telemetry_collection.telemetry_structs import *
-
-# from topology.network_topo import *
-# from topology.topology_controller import * 
-
-# from traffic_generation.host_traffic_manager import *
-# from traffic_generation.iperf_stream import *
-# from traffic_generation.traffic_controller import *
+"""
+Main experiment starting point. 
+"""
 from datetime import datetime
 import logging
 import logging.config
@@ -34,6 +26,7 @@ from traffic_generation.traffic_generation_config import TrafficGenerationConfig
 logger = logging.getLogger("experiment_main")
 
 if __name__ == "__main__":
+    # mininet needs to be run in sudo.
     if os.geteuid() != 0:
         exit("You need to have root privileges to run this script.\nPlease try again, this time using 'sudo'. Exiting.")
 
@@ -115,6 +108,7 @@ if __name__ == "__main__":
                 time.sleep(5)
                 t += 5
 
+        # after the experiment duration has passed, we now signal to each of these processes to stop.
         topo_snd.send(0)
         telemetry_snd.send(0)
         traffic_snd.send(0)

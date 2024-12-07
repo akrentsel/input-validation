@@ -1,3 +1,6 @@
+"""
+Global traffic controller is TrafficControlBlock here; spawns host traffic managers for each host.
+"""
 from multiprocessing.connection import Connection
 from mininet.node import Host
 from mininet.net import Mininet
@@ -24,7 +27,10 @@ class TrafficControlBlock():
         self.total_streams:int = 0
         self.host_manager_map:dict = {}
         self.host_list:Collection[Host] = list(mininet.hosts)
-        self.kill_signal:bool = False # TODO: implement graceful termination...
+        self.kill_signal:bool = False
+
+        # each thread managing traffic for each host brawls for this lock
+        # to up9date total_bw/stream limits.
         self.lock = Lock()
         self.thread_executor:ThreadPoolExecutor = ThreadPoolExecutor(max_workers = 3 * len(self.host_list))
 
@@ -39,6 +45,7 @@ class TrafficControlBlock():
                 futures.append(self.thread_executor.submit(self.host_manager_map[host].run))
 
             while not conn.poll():
+                # routinely poll Futures to check for premature exceptions
                 (done_futures, notdone_futures) = wait(futures, return_when="FIRST_EXCEPTION", timeout=2)
 
                 for future in done_futures:
@@ -49,6 +56,7 @@ class TrafficControlBlock():
             if conn.poll():
                 self.kill_signal = True
 
+            # now wrap things up
             (done_futures, notdone_futures) = wait(futures, return_when="FIRST_EXCEPTION")
 
             for future in done_futures:
@@ -61,6 +69,3 @@ class TrafficControlBlock():
         except Exception as e:
             logger.error(e, exc_info=True)
             raise e 
-    def signal_terminate(self):
-        logger.debug("received kill signal; terminating")
-        self.kill_signal = True

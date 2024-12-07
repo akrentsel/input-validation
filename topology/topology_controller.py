@@ -1,3 +1,9 @@
+"""
+Main controller for managing topology and random link up/down events.
+We don't need to spawn a manager per process here, since there aren't 
+as many events that need to be taken care of.
+"""
+
 from datetime import datetime
 from multiprocessing import Pipe
 import multiprocessing
@@ -28,28 +34,21 @@ class TopologyControlBlock():
     def __init__(self, nx_topo:NetworkXTopo, mininet:Mininet, network_event_config:NetworkEventConfig, topology_config: TopologyConfig):
         self.nx_topo = nx_topo
         self.mininet = mininet
-        self.event_interarrival_fn = lambda : np.random.exponential(network_event_config.event_interrarival_mean)
+
+        # TODO: make this frequency be a function of the number of links in the graph (duh?)
+        self.event_interarrival_fn = lambda : np.random.exponential(1/network_event_config.event_interrarival_mean)
         assert is_connected(self.nx_topo.nx_graph)
         # self.kill_signal = False
         self.topology_config = topology_config
 
-
-    # def __getstate__(self):
-    #     state = self.__dict__.copy()
-    #     # Don't pickle baz
-    #     del state["mininet"]
-    #     del state["event_interrarival_fn"]
-    #     return state
-
-    # def __setstate__(self, state):
-    #     self.__dict__.update(state)
-    #     # Add baz back since it doesn't exist in the pickle
-    #     self.mininet = None
-    #     self.event_interarrival_fn = None
-
     def run_simulation(self, conn:Connection):
+        """
+        Main entry point for the one process managing topology changes (i.e link up/down)
+        """
         try:
             logger.debug("start running topology control")
+            # we listen for when main experiment spawn process (in main_experiment.py) tells
+            # us to finish by listening for anything it sends along this conn object.
             while not conn.poll():
                 time.sleep(self.event_interarrival_fn())
 
@@ -75,6 +74,3 @@ class TopologyControlBlock():
         except Exception as e:
             logger.error(e, exc_info=True)
             raise e
-    def kill(self):                    
-        logger.debug(f"kill switch flipped; terminating topology simulation")
-        self.kill_signal = True

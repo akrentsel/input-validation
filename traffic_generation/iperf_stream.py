@@ -1,3 +1,6 @@
+"""
+Data-only struct to hold characteristics of each spawned iperf stream.
+"""
 from mininet.node import Host
 from mininet.net import Mininet
 from collections.abc import Collection

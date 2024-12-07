@@ -1,3 +1,10 @@
+"""
+NetworkXTopo is a class that overloads Mininet.Topo,
+so that we can create mininet.Topo objects from NetworkX/TopoHub
+and pass them as arguments to create mininet.Net instances based on
+our topology.
+"""
+
 from pathlib import Path
 from threading import Lock
 import networkx as nx
@@ -19,7 +26,16 @@ from topology.topology_config import TopologyConfig
 logger = logging.getLogger("topology")
 class NetworkXTopo(Topo):
     # TODO: assert that bw, latency arguments are passed correctly
+
     def build(self, graph:nx.Graph, topology_config:TopologyConfig, **params):
+        """
+        this is our override, which we use to add links/switches based on 
+        specified graph topology and configuration.
+
+        ASSUMPTION: graph shows only switches/links between switches, not hosts. 
+            we add hosts to each switch as specified based on the config file.
+        """
+
         self.mn_nx_name_map = {}
         self.nx_mn_name_map = {}
         self.nx_graph = graph
@@ -43,6 +59,7 @@ class NetworkXTopo(Topo):
             bw = None
             delay = None
             if self.topology_config.use_bw_delay:
+                # try to use bw/delay parameters in each edge of graph, if they exist and config tells us to use them (i.e. if use_naive_{bw/delay} set to False); otherwise, use the naive bw/delays specified in config. 
                 bw = graph.edges[end1, end2].get("bw", self.topology_config.naive_link_bw) if (not self.topology_config.use_naive_bw) else self.topology_config.naive_link_bw
                 delay = graph.edges[end1, end2].get("delay", self.topology_config.naive_link_delay) if (not self.topology_config.use_naive_delay) else self.topology_config.naive_link_delay
             if (bw is not None and delay is not None):
@@ -57,6 +74,10 @@ class NetworkXTopo(Topo):
 
     @staticmethod
     def construct_nx_topo_from_mininet_topo(mn_topo:Topo):
+        """
+        not currently used. TLDR: given mininet.Topo instance, create a superclass NetworkXTopo from it
+        by building out a few more instance variables.
+        """
         logger.info("constructing topology from mininet topology")
         nx_topo = mn_topo
         nx_topo.__class__ = NetworkXTopo # lol
@@ -81,6 +102,9 @@ class NetworkXTopo(Topo):
 
     @staticmethod
     def construct_nx_topo_from_graph_file(topology_config:TopologyConfig, **params):
+        """
+        called by construct_nx_topo_from_config
+        """
         logger.info(f"constructing topology from graph file {topology_config.graph_file_path}")
         nx_graph = getattr(nx, topology_config.networkx_graph_read_function)(topology_config.graph_file_path)
 
@@ -88,15 +112,24 @@ class NetworkXTopo(Topo):
 
     @staticmethod
     def construct_nx_topo_from_nx_graph(graph:nx.Graph, topology_config:TopologyConfig, **params):
+        """
+        called by construct_nx_topo_from_config
+        """
         logger.info(f"constructing topology from networkx graph")
         return NetworkXTopo(graph=graph, topology_config=topology_config, **params)
     
     @staticmethod
     def construct_nx_topo_from_topohub(topology_config:TopologyConfig, **params):
+        """
+        called by construct_nx_topo_from_config
+        """
         logger.info(f"constructing topology from topohub topology {topology_config.topohub_name}")
         topo = topohub.get(topology_config.topohub_name)
         nx_graph = nx.node_link_graph(topo)
 
+        # topohub graphs tend to contain a parameter called 'distance' for every edge, which we can use
+        # to construct our metric of delay; we just need to normalize to ensure that the mean delay
+        # across our links is based on what is specified by topology_config.topohub_mean_link_delay.
         dist_mean = np.nanmean([nx_graph.edges[edge[0], edge[1]].get('dist', np.nan) for edge in nx_graph.edges])
 
         for (node1, node2) in nx_graph.edges:
@@ -106,6 +139,9 @@ class NetworkXTopo(Topo):
     
     @staticmethod
     def construct_nx_topo_from_config(topology_config:TopologyConfig, **params):
+        """
+        main entry method for constructing mininet topology from topology config file.
+        """
         if (topology_config.topohub_name is not None):
             return NetworkXTopo.construct_nx_topo_from_topohub(topology_config, **params)
         elif topology_config.graph_file_path is not None:

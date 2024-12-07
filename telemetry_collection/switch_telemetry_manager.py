@@ -1,3 +1,7 @@
+"""
+Manages telemetry logging for a particular switch. Gets created by global telemetry controller 
+    (i.e. TelemetryControlBlock in telemetry_controller.py). 
+"""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 from typing import Union
@@ -31,6 +35,18 @@ logger = logging.getLogger("telemetry_collection")
 class SwitchTelemetryManager():
     MAX_NUM_ROWS = 1000
     def __init__(self, switch:Switch, telemetry_control_block:TelemetryControlBlock, telemetry_config:TelemetryConfig):# switch:Switch, telemetry_control_block:TelemetryControlBlock, base_log_dir:Path, error_log_dir:Path, base_log_name_prefix:str, error_log_name_prefix:str, collection_interval:float=10, max_rows:int=MAX_NUM_ROWS, *kwargs):
+        """
+        Called by global telemetry controller (i.e. TelemetryControlBlock) to manage telemetry logging for a particular switch.
+
+        :param switch: the switch to loga telemetry data for.
+        :param telemetry_control_block: the global telemetry controller that called this function. 
+            we assume access to this global controller in order to submit disk jobs to its thread pool,
+            getting timestamps w.r.t. experiment start,
+            and checking if the experiment has been killed/ended.
+        :param base_log_struct: struct to log non-postprocessed telemetry data. 
+        :param error_log_struct: struct to log postprocessed (error-inserted) telemetry data.
+        :param telemetry_config: configuration.
+        """
         self.telemetry_control_block:TelemetryControlBlock = telemetry_control_block
         self.switch:Switch = switch
         self.base_log_struct = TelemetryLogStruct(self, telemetry_config.base_log_dir, f"{telemetry_config.base_log_prefix}_{switch.name}", telemetry_config.max_rows)
@@ -42,10 +58,16 @@ class SwitchTelemetryManager():
         self.next_flow_collection = -1
         self.error_generation_control_block = telemetry_control_block.error_generation_control_block
 
+        # keep track of delayed telemetry entries here, and the greatest time any entry is delayed on the list
         self.delay_list = []
         self.delay_end_time = -1
 
     def run(self):
+        """
+            Called in a thread pool by the global telemetry controller (i.e. TelemetryControlBlock). 
+            Does routine telemetry collection.
+            Starts each collection process for each of the three telemetry types at separate times.
+        """
         timestamp = self.telemetry_control_block.experiment_control_block.get_experiment_timestamp()
         self.next_counter_collection = random.random() * self.collection_interval + timestamp 
         self.next_flow_collection = random.random() * self.collection_interval + timestamp 
@@ -149,6 +171,7 @@ class SwitchTelemetryManager():
 
         lines = output.splitlines()
         flow_entry_list = []
+        # output has multiple flow entries (one per line), so go through them here
         for line in lines:
             try:
                 flow_struct = FlowStruct(timestamp, self.switch.name, line)
@@ -173,6 +196,11 @@ class SwitchTelemetryManager():
 
 
     def push_logs(self, log_struct_list:Collection[Union[CounterStruct, StatusStruct, FlowStruct]]):
+        """
+        given a list of non-postprocessed telemetry entries, push them onto the log struct 
+        keeping track of non-postprocessed entries (base_log_struct), apply errors, and update
+        the log struct keeping track of postprocessed entries (error_log_struct)
+        """
         logger.debug(f"pushing {len(log_struct_list)} logs for {self.switch.name}")
         self.base_log_struct.append_logs(log_struct_list)
         corrupt_append_list = []
@@ -182,6 +210,7 @@ class SwitchTelemetryManager():
         num_zeros = 0
         num_delays = 0
         for log_struct in log_struct_list:
+            # first, get error codes and apply the corresponding error functions
             error_codes = self.telemetry_control_block.error_generation_control_block.pick_error_codes(type(log_struct))
         
             if (self.error_generation_control_block.DROP_CODE in error_codes):
@@ -198,7 +227,9 @@ class SwitchTelemetryManager():
                 num_zeros += 1
                 corrupt_log_struct = log_struct._zero()
             
+            
             delay_this = False
+            # apply initial delay here
             if (self.error_generation_control_block.DELAY_CODE in error_codes):
                 new_time = corrupt_log_struct.timestamp + self.error_generation_control_block.pick_delay()
 
@@ -208,6 +239,7 @@ class SwitchTelemetryManager():
                     self.delay_end_time = new_time
                 delay_this = True
 
+            # if current entry is scheduled earlier than any packet on delay queue, delay it to be consistent with delays on queue
             if (corrupt_log_struct.timestamp <= self.delay_end_time and self.delay_end_time > 0):
                 if (corrupt_log_struct.timestamp < self.delay_end_time):
                     corrupt_log_struct = corrupt_log_struct._delay(self.delay_end_time)
@@ -217,6 +249,7 @@ class SwitchTelemetryManager():
                 num_delays += 1
                 self.delay_list.append(corrupt_log_struct)
             else:
+                # pop off entries on delay list that can now be "released" from the list
                 while (len(self.delay_list) > 0 and corrupt_log_struct.timestamp >= self.delay_list[0].timestamp):
                     corrupt_append_list.append(self.delay_list[0])
                     del self.delay_list[0]
@@ -231,6 +264,10 @@ class SwitchTelemetryManager():
         self.error_log_struct.append_logs(corrupt_append_list)
 
     def finalize_logs(self):
+        """
+        at experiment end, release entries from delay list into the log, 
+        and write everything to disk.
+        """
         logger.debug(f"switch {self.switch.name}: submititing log finalization requests")
         self.error_log_struct.append_logs(self.delay_list)
         self.delay_list = []
@@ -243,6 +280,11 @@ class SwitchTelemetryManager():
         self.base_log_struct.file_counter += 1
 
     def aggregate_logs(self):
+        """
+        at experiment end, global telemetry controller (i.e. parent TelemetryControlBlock) calls this 
+        to aggregate the collection of logs made for this switch into one
+        CSV file.
+        """
         logger.debug(f"switch {self.switch.name}: aggregating {self.base_log_struct.file_counter} logs")
         base_df_list = []
         for i in range(self.base_log_struct.file_counter):

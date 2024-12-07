@@ -22,6 +22,12 @@ if TYPE_CHECKING:
     from traffic_generation.traffic_controller import TrafficControlBlock
 
 logger = logging.getLogger("traffic_generation")
+
+"""
+Struct for spawning/managing iperf streams outgoing from the particular host
+it is responsible for. Created by the global traffic controller 
+(i.e. TrafficControlBlock in traffic_controller.py), one for each host.
+"""
 class HostTrafficManager():
 
     @staticmethod
@@ -30,34 +36,36 @@ class HostTrafficManager():
 
     def __init__(self, host:Host, traffic_control_block:TrafficControlBlock, traffic_generation_config:TrafficGenerationConfig):
         self.flows_per_host = traffic_generation_config.flows_per_host
-        self.flow_bandwidth_distribution = lambda: max(traffic_generation_config.flow_bandwidth_min, np.random.normal(traffic_generation_config.flow_bandwidth_mean, traffic_generation_config.flow_bandwidth_var))
-        self.flow_duration_distribution = lambda: max(traffic_generation_config.flow_duration_min, np.random.normal(traffic_generation_config.flow_duration_mean, traffic_generation_config.flow_duration_var))
+        self.flow_bandwidth_distribution = lambda: max(traffic_generation_config.flow_bandwidth_min, np.random.normal(traffic_generation_config.flow_bandwidth_mean, traffic_generation_config.flow_bandwidth_var**.5))
+        self.flow_duration_distribution = lambda: max(traffic_generation_config.flow_duration_min, np.random.normal(traffic_generation_config.flow_duration_mean, traffic_generation_config.flow_duration_var**.5))
         self.error_on_stream_failure = traffic_generation_config.error_on_stream_failure
         self.traffic_control_block = traffic_control_block
         self.host:Host = host
-        self.nontruant_iperf_stream_list:Collection[IperfStream] = SortedList(key=lambda stream: stream.expire_time) # maps unix timestamp to stream by expiration time
+        
+        #sorted list of streams that are truant, i.e. still running beyond the timestamp we expected them to finish
+        self.nontruant_iperf_stream_list:Collection[IperfStream] = SortedList(key=lambda stream: stream.expire_time)
+
+        # sorted list of streams that are running, and are not "truant" i.e. not yet reached the timestamp they 
+        # are scheduled to finish.
         self.truant_iperf_stream_list:Collection[IperfStream] = SortedList(key=lambda stream: stream.expire_time)
+
+        # start a listening server.
         host.cmd("iperf -s &")
 
     def create_stream(self, dst:Host, bw:float=10, duration:float=5.0):
         #ASSUMPTION: lock has been acquired by us (there isn't a official way of checking if we have the lock, fuck python)
         logger.debug(f"creating stream between {self.host} and {dst} with duration {duration}, bandwidth {bw}")
         iperf_popen = self.host.popen(f"iperf -c {dst.IP()} -t {duration} -b {bw}M")
+
+        # IperfStream is just a data-only struct containing those 5 variables. Importantly, it contains a Popen struct
+        # that lets us check on the status of the iperf stream running in the "background".
         self.nontruant_iperf_stream_list.add(IperfStream(self.host, dst, iperf_popen, bw, duration))
 
     def run(self):
-        # I know this "while True" structure may seem inefficient, BUT:
-        # 1) in python, time.sleep() yields the thread that is running
-        # 2) in python, due to GIL only one thread can run at a time even in ThreadPoolExecutors; 
-        # as such, we were already fucked in terms of threading efficiency from the start lol
-        # this really is I believe the best that we can do :')
-        # ref: https://superfastpython.com/python-concurrency-choose-api/
-        # ref: https://superfastpython.com/threadpoolexecutor-vs-threads/ 
-        # PS: yes, I know about asyncio, but that doesnt seem to work here
-        #     b/c cannot just use create_subprocess_shell as we need to 
-        #     run them within the mininet cli, not a general shell
         time.sleep(2*self.flow_duration_distribution())
         while not self.traffic_control_block.kill_signal: 
+
+            # first, process existing nontruant and truant stream lists.
             while len(self.nontruant_iperf_stream_list) > 0 and self.nontruant_iperf_stream_list[0].expire_time < time.time():
                 first_stream = self.nontruant_iperf_stream_list.pop()
                 self.truant_iperf_stream_list.add(first_stream)
@@ -81,6 +89,9 @@ class HostTrafficManager():
             # begin critical section; we need to check/update against total bandwidth and flow count
             self.traffic_control_block.lock.acquire()
 
+            # for the streams that have expired, update the total_streams and total_bw
+            # so that we can eventually be allowed to create new streams to replace
+            # what has ended.
             for idx in reversed(rm_indices):
                 self.traffic_control_block.total_streams -= 1
                 self.traffic_control_block.total_bw -= self.truant_iperf_stream_list[idx].bw
@@ -106,12 +117,19 @@ class HostTrafficManager():
             for stream_arg in streams_to_create_args:
                 HostTrafficManager.create_stream(*stream_arg)
 
+            # we compute how long we sleep based on:
+            #  1) until when the next nontruant iperf stream expires.
+            #  2) until when we want to next check on the truant iperf streams.
+
+
+            # part (1) of sleep time computation
             next_sleep_time = max(.5, min(map(lambda stream: stream.expire_time - time.time(), self.nontruant_iperf_stream_list)) if len(self.nontruant_iperf_stream_list) > 0 else 0)
 
-
+            # part (2) of sleep time computation.
             # TODO: right now exponential backoff is fucked; if we are polling for statuses of two old subprocesses w/ backoff 10s and new incoming one arrives w/ backoff .5s, we wait for the minimum time among all 3 (which is .5s).
             next_backoff_time = 10e6
             for iperf_stream in self.truant_iperf_stream_list:
                 next_backoff_time = min(next_backoff_time, HostTrafficManager.compute_backoff_time(iperf_stream))
 
+            # and finally, take a break :)
             time.sleep(min(next_sleep_time, next_backoff_time))

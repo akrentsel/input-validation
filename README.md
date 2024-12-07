@@ -2,6 +2,36 @@
 
 Codebase for exploring feasibility of input validation.
 
+## Hardware Requirements
+☐ Check if you can run paint
+☐ Potato
+☐ Decent
+☐ Fast
+☐ Rich boi
+☑ [Ask NASA if they have a spare computer :(](https://www.nas.nasa.gov/hecc/support/system_status.html)
+
+## Installation instructions (via VM):
+1. Follow Mininet VM installation instructions [here (as option 1)](https://mininet.org/download/)
+    - In particular, the [VM setup notes](https://mininet.org/vm-setup-notes/) are important to follow.
+    - Personal preference: VMWare as virtualization system; **Ubuntu 20.04** as the Mininet VM image version.
+2. Configure the VM to have much more processors and memory (trust me, you will need this)
+    - my settings: 2 processors, 8 cores per processor; 16GB of memory.
+3. Also, enlarge the VM disk size (e.g. to 32 GB); not sure if this is needed but it may be.
+    - you may need to enlarge the partition within the Mininet VM by using [Gparted](https://gparted.org/) in a Xterm-forwarding-enabled SSH session.
+4. [Install Miniconda](https://docs.anaconda.com/miniconda/install/) in the Mininet VM, **making sure to select the option to modify PATH (or .bashrc, I can't remember)**
+5. Now, install the ONOS controller in the Mininet VM. 
+    - [**Install the dependencies needed for ONOS installation**](https://github.com/opennetworkinglab/onos?tab=readme-ov-file#build-onos-from-source)
+        - or else, ONOS won't build properly!
+    - Then, [build ONOS from source](https://github.com/opennetworkinglab/onos?tab=readme-ov-file#build-onos-from-source).
+    - (note: ONOS does have pre-built images, but I couldn't get them to run in the VM. So, we build from source instead!)
+6. Clone this repo and install requirements:
+    ```
+    cd ~
+    git clone https://github.com/akrentsel/input-validation.git
+    cd input-validation
+    pip install -r requirements.txt
+    ```
+
 ## How to run:
 1. Modify configuration files `log_config.yaml` and `experiment_config.yaml` as needed
 2. Start ONOS controller:
@@ -34,6 +64,7 @@ Codebase for exploring feasibility of input validation.
         cfg set org.onosproject.fwd.ReactiveForwarding matchIpv6FlowLabel true
         cfg set org.onosproject.fwd.ReactiveForwarding matchTcpUdpPorts true
         ```
+        **Make sure there are no messages of the form `... is not configured`; if they appear, rerun these commands as many times as necessary.**
 4. Run the experiment: `cd ~/input-validation; sudo python experiment_main.py`.
     - If needed, clear the directory where experiment outputs are stored, and reset the mininet environment with `sudo mn -c`
     - 

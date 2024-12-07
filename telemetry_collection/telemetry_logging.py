@@ -26,6 +26,13 @@ if TYPE_CHECKING:
     from telemetry_collection.switch_telemetry_manager import SwitchTelemetryManager
 
 logger = logging.getLogger("telemetry_collection")
+
+
+"""
+Struct used to log telemetry entries.
+Currently, each switch telemetry manager creates two of these structs:
+  one for logging non-postprocessed entries, and one for logging error-inserted entries.
+"""
 class TelemetryLogStruct():
     MIN_WRITE_LEN = 500
     def __init__(self, switch_telemetry_controller:SwitchTelemetryManager, log_dir:str, log_prefix:str, max_rows):
@@ -117,7 +124,8 @@ class TelemetryLogStruct():
         self.counter_type_list.append(None)
         self.counter_val_list.append(None)
 
-
+        # flow_structs (instanceof FlowStruct) that we construct using the parsings by OVS contain three dictionaries: matches, actions, and general info.
+        # if the new flow_struct we'd like to add has a new key, we need to add that key and keep track of it in our struct.
         for log_dict, flow_dict in [(self.match_dict_list, flow_struct.match_entries), (self.action_dict_list, flow_struct.action_entries), (self.info_dict_list, flow_struct.info_entries)]:
             for k, lst in log_dict.items():
                 if k in flow_dict:
@@ -129,7 +137,7 @@ class TelemetryLogStruct():
                 if k not in log_dict:
                     log_dict[k] = [None for _ in range(self.num_entries)]
 
-
+    # currently unused
     def get_idx_before(self, timestamp:int):
         for i in range(len(self.timestamp_list)):
             if self.timestamp_list[i] > timestamp:
@@ -148,11 +156,13 @@ class TelemetryLogStruct():
         
         logger.debug(f"submitting disk write request for: {path}")
 
+        # this has the subset of current entries we want to move to disk.
         df_dict = {"timestamp": self.timestamp_list[:idx_before], "errors_applied": self.error_gen_list[:idx_before], "router_name": self.router_name_list[:idx_before], "telemetry_type":self.telemetry_type_list[:idx_before], "interface_name": self.interface_name_list[:idx_before], "counter_direction": self.direction_list[:idx_before], "counter_type": self.counter_type_list[:idx_before], "counter_val": self.counter_val_list[:idx_before]}
         for dict_list in [self.info_dict_list, self.match_dict_list, self.action_dict_list]:
             for k, v in dict_list.items():
                 df_dict[k] = v[:idx_before]
 
+        # submit a job to write df_dict to disk as a CSV file.
         self.switch_telemetry_manager.telemetry_control_block.lock.acquire()
         self.switch_telemetry_manager.telemetry_control_block.io_thread_futures.append(self.switch_telemetry_manager.telemetry_control_block.io_thread_executor.submit(TelemetryLogStruct.write_to_disk_async, path, df_dict))
         self.switch_telemetry_manager.telemetry_control_block.lock.release()

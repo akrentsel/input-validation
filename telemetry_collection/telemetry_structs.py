@@ -1,3 +1,6 @@
+"""
+Structures to represent the three types of telemetry entries.
+"""
 
 from typing import Union
 from mininet.node import Host, Switch
@@ -92,8 +95,11 @@ class FlowStruct(TelemetryStruct):
         self.info_entries = {}
         self.original = flow_cli_output
 
+        # ovs package already has a function to parse flow outputs into dicts :)
         ofp_parsing:dict = json.loads(json.dumps(OFPFlow(flow_cli_output).dict(), indent=4, cls=FlowEncoder))
 
+        # the dicts generated from OFPFlow reside in three dictionaries: match, actions, and info,
+        # each of which have multiple layers that we'd like to flatten. we do that here.
         if "match" in ofp_parsing:
             self.match_entries = FlowStruct.flatten_dict(ofp_parsing['match'])
         if "actions" in ofp_parsing:

@@ -1,3 +1,7 @@
+"""
+Struct to hold configuration parameters, to pass to traffic controller and 
+its host traffic managers that it spawns.
+"""
 from pathlib import Path
 from pydantic import BaseModel
 import numpy as np

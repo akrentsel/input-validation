@@ -1,3 +1,7 @@
+"""
+Struct to hold configuration parameters, to pass to telemetry controllers/loggers.
+"""
+
 from pathlib import Path
 from pydantic import BaseModel
 class ErrorGenerationConfig(BaseModel):

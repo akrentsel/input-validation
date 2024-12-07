@@ -1,3 +1,22 @@
+# Error Generation Configuration
+#
+# :drop_prob: probability of any router's telemetry entry being dropped.
+# :counter_spike_prob: probability of any **interface counter** 
+#     on any router being spiked by multiplicity .1x, .2x, 2x, 5x, 10x;  
+#       any of those multiplicities are picked with equal probability
+# :status_flip_prob: probability of any **interface status** 
+#       on any router being flipped.
+# :counter_zero_prob: probablity of any **interface counter**
+#       on any router being set to zero.
+# :delay_prob: probability of any telemetry entry on any router being delayed. 
+# :delay_mean: if telemetry entry is delayed, specify its delay time using a 
+#       normal distribution with this mean
+# :delay_var: if telemetry entry is delayed, specify its delay time using a 
+#       normal distribution with this variance
+# :delay_min: if telemetry entry is delayed, clamp the delay time specified
+#        with the normal distribution N(delay_mean, delay_var) to have this minimum.
+
+
 error_generation_config:
   drop_prob: .33
   counter_spike_prob: .33
@@ -8,6 +27,24 @@ error_generation_config:
   delay_var: 10.0
   delay_min: 20.0
 
+# Telemetry Configuration
+
+# :base_log_dir: folder in which all non-postprocessed telemetry collections are stored.
+# :error_log_dir: folder in which all postprocessed (i.e. with error insertions)
+#       telemetry collections are stored. 
+# :collection_interval: interval (in secs) in which routers should routinely collect 
+#       each type of telemetry entry.
+# :base_log_prefix: prefix of file names in which non-postprocessed telemetry are logged;
+#       each outputted file will then have names of the format: 
+#           - prior to aggregation: f"{base_log_prefix}_{switch_name}_{log_num}.csv"
+#           - final aggregated file: f"{base_log_prefix}_{switch_name}_{aggregated}.csv"
+# :error_log_prefix: same as base_log_prefix, but for the postprocessed telemetry logs.
+# :max_rows: maximum number of entries to keep in memory, per switch, before attempting to write to disk.
+# :ignore_bad_flow_parsing: sometimes, the outputs of `ovs-ofctl dump-flows` used for collecting flow logs
+#       is unparsable. If set to True, ignore those outputs. If set to False, raises exception 
+#       and halts experiment.
+
+
 telemetry_config:
   # logging_dir: "/home/mininet/input-validation/.logout"
   base_log_dir: "/home/mininet/experiment-out/base"
@@ -15,9 +52,39 @@ telemetry_config:
   collection_interval: 10
   base_log_prefix: "base_telemetry"
   error_log_prefix: "error_telemetry"
-  max_rows: 500
+  max_rows: 100
   ignore_bad_flow_parsing: True
 
+# Topology Configuration
+# :use_bw_delay: If True, assign each link a bandwidth limit and delay; otherwise, don't assign.
+#     THE FOLLOWING WILL ONLY HAPPEN IF use_bw_delay == True:
+#       - for each link, we will do the following to assign bw's:
+#           - if 'use_naive_bw' set to True, force all links to have bandwidth :naive_link_bw:
+#               as specified in this file
+#           - otherwise:
+#               - if imported graph has edges with parameter 'bw', use that as bandwidth limit
+#               - otherwise, assign :naive_link_bw: as specified in this file.
+#       - for each link, we will do the following to assign delays:
+#           - if 'use_naive_delay' set to True, force all links to have delay :naive_link_delay:
+#           - otherwise:
+#               - if using TopoHub import, each edge in imported graph has a 'distance' parameter:
+#                   - so, assign each edge a delay proportional to this distance, 
+#                       but normalized to have a global mean of topohub_mean_link_delay as 
+#                       specified in this file
+#               - otherwise, look for a 'delay' parameter in each edge of imported graph.
+#                   - if not present, assign :naive_link_delay: as specified in this file. 
+# :naive_link_bw: used as specified above, ONLY IF use_bw_delay == True
+# :naive_link_delay: used as specified above, ONLY IF use_bw_delay == True
+# :use_naive_bw: used as specified above, ONLY IF use_bw_delay == True
+# :use_naive_delay: used as specified above, ONLY IF use_bw_delay  == True
+# :topohub_name: if importing graph from TopoHub, specify the name of the TopoHub import here. 
+# :graph_file_path: if importing graph from graph configuration file , specify the filepath here.
+# :networkx_graph_read_function: if importing graph from graph configuration file, specify what function
+#     from networkX to use to read the graph configuration file.
+#       List of read functions are here: https://networkx.org/documentation/stable/reference/readwrite/index.html
+# :mininet_topo_path: read from mininet topology class, but not yet supported
+# :topohub_mean_link_delay: used as specified above as a constant for normalizing
+# :hosts_per_switch: number of hosts to attach to each switch specified as nodes in the graph. 
 topology_config:
   # logging_dir: "/home/mininet/input-validation/.logout"
   use_bw_delay: True
@@ -35,9 +102,25 @@ topology_config:
   topohub_mean_link_delay: 25
   hosts_per_switch: 2
 
+# Network Event Configuration
+#
+# :event_interarrival_mean: in the whole graph, randomly toggle link statuses with interarrival times
+#     specified by Exponential(1/event_interarrival_mean)
 network_event_config:
   event_interrarival_mean: 10
 
+
+# Traffic Generation Config
+# :flow_bandwidth_{min/mean/var}: randomly spawn iperf streams with maximum bandwidth determined by:
+#      max(flow_bandwidth_min, N(flow_bandwidth_mean, flow_bandwidth_var))
+# :flow_duration_{min/mean/var}: randomly spawn iperf streams with duration determined by:
+#      max(flow_duration_min, N(flow_duration_mean, flow_duration_var))
+# :flows_per_host: for every host in the graph, spawn flows_per_host flows concurrently
+# :total_bandwidth_limit: maximum total concurrent iperf traffic on entire network
+# :total_stream_limit: maximum total number of concurrent streams on entire network
+# :error_on_stream_failure: sometimes, iperf streams fail to generate traffic if no routes found to destination
+#     such as due to CPU bottlenecks or topology/controller misconfiguration. 
+#     If set to False, ignore such failures. If set to True, report exception and halt experiment.
 traffic_generation_config:
   # logging_dir: "/home/mininet/input-validation/.logout"
   flow_bandwidth_min: 2
@@ -54,6 +137,11 @@ traffic_generation_config:
   total_stream_limit: 100
 
   error_on_stream_failure: False
+
+# Experiment Config
+# :experiment_time_mins: time to run the experiment, in minutes
+# :logging_config_filepath: can configure the generation of logging (i.e. error/warning/debug) messages
+#   made by the experiment run, if this file is specified here.
 
 experiment_config:
   # logging_dir: "/home/mininet/input-validation/.logout"
