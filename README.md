@@ -3,11 +3,11 @@
 Codebase for exploring feasibility of input validation.
 
 ## Hardware Requirements
-☐ Check if you can run paint
-☐ Potato
-☐ Decent
-☐ Fast
-☐ Rich boi
+☐ Check if you can run paint <br />
+☐ Potato <br />
+☐ Decent <br />
+☐ Fast <br />
+☐ Rich boi <br />
 ☑ [Ask NASA if they have a spare computer :(](https://www.nas.nasa.gov/hecc/support/system_status.html)
 
 ## Installation instructions (via VM):
