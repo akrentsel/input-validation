@@ -24,7 +24,7 @@ Codebase for exploring feasibility of input validation.
         - or else, ONOS won't build properly!
     - Then, [build ONOS from source](https://github.com/opennetworkinglab/onos?tab=readme-ov-file#build-onos-from-source).
     - (note: ONOS does have pre-built images, but I couldn't get them to run in the VM. So, we build from source instead!)
-6. Clone this repo and install requirements:
+6. In Mininet VM, clone this repo and install requirements:
     ```
     cd ~
     git clone https://github.com/akrentsel/input-validation.git
