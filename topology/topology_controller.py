@@ -64,11 +64,20 @@ class TopologyControlBlock():
                     else:
                         logger.debug(f"bringing down link between {n1} and {n2}")
                         self.mininet.configLinkStatus(mn_name1, mn_name2, "down")
+                        for i in range(10):
+                            while any([link.intf1.isUp() or link.intf2.isUp() for link in self.mininet.linksBetween(n1, n2)]):
+                                time.sleep(1)
+
                         assert not any([link.intf1.isUp() or link.intf2.isUp() for link in self.mininet.linksBetween(n1, n2)])
                 else:                    
                     logger.debug(f"bringing up link between {n1} and {n2}")
                     self.nx_topo.nx_graph.add_edge(edge[0], edge[1])
                     self.mininet.configLinkStatus(mn_name1, mn_name2, "up")
+
+                    for i in range(10):
+                        while not all([link.intf1.isUp() and link.intf2.isUp() for link in self.mininet.linksBetween(n1, n2)]):
+                            time.sleep(1)
+
                     assert all([link.intf1.isUp() and link.intf2.isUp() for link in self.mininet.linksBetween(n1, n2)])
             logger.debug("finish running topology control.")
         except Exception as e:
