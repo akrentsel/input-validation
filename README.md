@@ -14,13 +14,13 @@ Codebase for exploring feasibility of input validation.
 1. Setup the `input_validation` experiment and configurations:
     1. In your desired directory, `git clone https://github.com/akrentsel/input-validation.git`
     2. In that directory, modify configuration files `log_config.yaml` and `experiment_config.yaml`; **you will probably need to do this**. 
-        In particular, pay attention to the following in `experiment_config.yaml`:
+        - In particular, pay attention to the following in `experiment_config.yaml`:
             - `telemetry_config/base_log_dir`
-	    - `telemetry_config/error_log_dir`
+            - `telemetry_config/error_log_dir`
             - `experiment_config/logging_config_filepath` (set this to the path of `log_config.yaml`)
-        And to the following in `log_config.yaml`:
+        - And to the following in `log_config.yaml`:
             - `handlers/*/filename`
-        Using the same `pip` binary you will be running in `sudo` mode, run `cd input-validation; {path to pip binary} install -r requirements.txt`
+    3. Using the same `pip` binary you will be running in `sudo` mode, run `cd input-validation; {path to pip binary} install -r requirements.txt`
 2. Start ONOS controller: 
     1. in one terminal, run `sudo docker run -t -p 8181:8181 -p 8101:8101 -p 5005:5005 -p 830:830 --name onos onosproject/onos`; wait for a status message of the form `Updated node {IP address} state to READY` before proceeding (usually that IP is 172.17.0.2); *do not quit or exit this terminal, or use -d flag to start the container in detached mode*
     2. in another terminal, using the IP address seen in the above status message, run `ssh -p 8101 karaf@{IP address}`; this should open an ONOS karaf CLI interface.
