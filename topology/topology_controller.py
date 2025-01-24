@@ -66,6 +66,7 @@ class TopologyControlBlock():
                         self.mininet.configLinkStatus(mn_name1, mn_name2, "down")
                         for i in range(10):
                             while any([link.intf1.isUp() or link.intf2.isUp() for link in self.mininet.linksBetween(n1, n2)]):
+                                self.mininet.configLinkStatus(mn_name1, mn_name2, "down")
                                 time.sleep(1)
 
                         assert not any([link.intf1.isUp() or link.intf2.isUp() for link in self.mininet.linksBetween(n1, n2)])
@@ -76,6 +77,7 @@ class TopologyControlBlock():
 
                     for i in range(10):
                         while not all([link.intf1.isUp() and link.intf2.isUp() for link in self.mininet.linksBetween(n1, n2)]):
+                            self.mininet.configLinkStatus(mn_name1, mn_name2, "up")
                             time.sleep(1)
 
                     assert all([link.intf1.isUp() and link.intf2.isUp() for link in self.mininet.linksBetween(n1, n2)])

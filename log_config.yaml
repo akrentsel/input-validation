@@ -18,22 +18,22 @@ handlers:
     stream: ext://sys.stdout
   experiment_main_file:  
     class : logging.FileHandler
-    filename: /home/mininet/experiment-out/experiment_main_logging.txt
+    filename: /home/hwei0/experiment-out/experiment_main_logging.txt
     mode: "a"
     formatter: verbose_multithread
   telemetry_file:  
     class : logging.FileHandler
-    filename: /home/mininet/experiment-out/telemetry_logging.txt
+    filename: /home/hwei0/experiment-out/telemetry_logging.txt
     mode: "a"
     formatter: verbose_multithread
   topology_file:  
     class : logging.FileHandler
-    filename: /home/mininet/experiment-out/topology_logging.txt
+    filename: /home/hwei0/experiment-out/topology_logging.txt
     mode: "a"
     formatter: verbose_multithread
   traffic_generation_file:  
     class : logging.FileHandler
-    filename: /home/mininet/experiment-out/traffic_generation_logging.txt
+    filename: /home/hwei0/experiment-out/traffic_generation_logging.txt
     mode: "a"
     formatter: verbose_multithread
   

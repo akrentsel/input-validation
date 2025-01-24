@@ -47,8 +47,8 @@ error_generation_config:
 
 telemetry_config:
   # logging_dir: "/home/mininet/input-validation/.logout"
-  base_log_dir: "/home/mininet/experiment-out/base"
-  error_log_dir: "/home/mininet/experiment-out/error"
+  base_log_dir: "/home/hwei0/experiment-out/base"
+  error_log_dir: "/home/hwei0/experiment-out/error"
   collection_interval: 10
   base_log_prefix: "base_telemetry"
   error_log_prefix: "error_telemetry"
@@ -107,7 +107,7 @@ topology_config:
 # :event_interarrival_mean: in the whole graph, randomly toggle link statuses with interarrival times
 #     specified by Exponential(1/event_interarrival_mean)
 network_event_config:
-  event_interrarival_mean: 10
+  event_interrarival_mean: 0.0001
 
 
 # Traffic Generation Config
@@ -146,4 +146,4 @@ traffic_generation_config:
 experiment_config:
   # logging_dir: "/home/mininet/input-validation/.logout"
   experiment_time_mins: 1
-  logging_config_filepath: "/home/mininet/input-validation/log_config.yaml"
+  logging_config_filepath: "/home/hwei0/input-validation/log_config.yaml"

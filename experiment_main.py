@@ -12,6 +12,7 @@ import time
 from mininet.net import Mininet
 from mininet.node import OVSSwitch, RemoteController
 import os
+import argparse
 
 from experiment_controller import ExperimentControlBlock
 from experiment_config import ExperimentConfig
@@ -26,12 +27,19 @@ from traffic_generation.traffic_generation_config import TrafficGenerationConfig
 logger = logging.getLogger("experiment_main")
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-c", "--config_path", type=str, required=True, help="path to experiment config file")
+    parser.add_argument("-i", "--ip", type=str, default="172.17.0.2", help="IP address of running SDN controller")
+    parser.add_argument("-p", "--port", type=int, default="6653", help="openflow port of running SDN controller")
+
+    args = parser.parse_args()
+
     # mininet needs to be run in sudo.
     if os.geteuid() != 0:
         exit("You need to have root privileges to run this script.\nPlease try again, this time using 'sudo'. Exiting.")
 
     config_doc = None
-    with open("/home/mininet/input-validation/experiment_config.yaml") as stream:
+    with open(args.config_path) as stream:
         config_doc = yaml.safe_load(stream)
 
     experiment_controller = ExperimentControlBlock(config_doc)
@@ -54,12 +62,16 @@ if __name__ == "__main__":
 
         logging.config.dictConfig(log_config)
 
+    logger.info(f"using configuration file {args.config_path}")
+    logger.info(f"using SDN controller at IP {args.ip}")
+    logger.info(f"using SDN controller at port {args.port}")
+
     # logging.getLogger("telemetry_collection").addHandler(FileHandler(Path(telemetry_config.logging_dir) / datetime.now().strftime('telemetry_collection_log_%H_%M_%d_%m_%Y.log')))
     # logging.getLogger("topology").addHandler(FileHandler(Path(topology_config.logging_dir) / datetime.now().strftime('topology_log_%H_%M_%d_%m_%Y.log')))
     # logging.getLogger("traffic_generation").addHandler(FileHandler(Path(traffic_generation_config.logging_dir) / datetime.now().strftime('traffic_generation_log_%H_%M_%d_%m_%Y.log')))
     # logging.getLogger("experiment_main").addHandler(FileHandler(Path(experiment_config.logging_dir) / datetime.now().strftime('experiment_main_log_%H_%M_%d_%m_%Y.log')))
 
-    controller = RemoteController('c0', ip='127.0.0.1', port=6653, protocols="OpenFlow13")
+    controller = RemoteController('c0', ip=args.ip, port=args.port, protocols="OpenFlow13")
     network_topo = NetworkXTopo.construct_nx_topo_from_config(topology_config)
     mininet = Mininet(network_topo, switch=OVSSwitch, controller=controller)
     mininet.start()

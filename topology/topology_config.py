@@ -4,7 +4,7 @@ Struct to hold configuration parameters, to pass to topology controller.
 from pathlib import Path
 from pydantic import BaseModel
 class NetworkEventConfig(BaseModel):
-    event_interrarival_mean: int =  60
+    event_interrarival_mean: float =  60
 
 class TopologyConfig(BaseModel):
     # logging_dir: str
