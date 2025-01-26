@@ -22,3 +22,7 @@ class TrafficGenerationConfig(BaseModel):
     total_stream_limit:int = 10e3
 
     error_on_stream_failure: bool = True
+
+    max_entries: int = 1000
+    demand_sampling_interval: int = 10
+    demand_log_dir: str

@@ -121,6 +121,9 @@ network_event_config:
 # :error_on_stream_failure: sometimes, iperf streams fail to generate traffic if no routes found to destination
 #     such as due to CPU bottlenecks or topology/controller misconfiguration. 
 #     If set to False, ignore such failures. If set to True, report exception and halt experiment.
+# :max_entries: maximum number of samples for demand before writing to disk
+# :demand_sampling_interval: targeted period of demand sampling
+# :demand_log_dir: directory to store demand logs
 traffic_generation_config:
   # logging_dir: "/home/mininet/input-validation/.logout"
   flow_bandwidth_min: 2
@@ -137,6 +140,11 @@ traffic_generation_config:
   total_stream_limit: 100
 
   error_on_stream_failure: False
+
+  max_entries: 1000
+
+  demand_sampling_interval: 10
+  demand_log_dir: "/home/hwei0/experiment-out/demand"
 
 # Experiment Config
 # :experiment_time_mins: time to run the experiment, in minutes

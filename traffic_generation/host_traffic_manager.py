@@ -41,6 +41,9 @@ class HostTrafficManager():
         self.error_on_stream_failure = traffic_generation_config.error_on_stream_failure
         self.traffic_control_block = traffic_control_block
         self.host:Host = host
+
+        # the only two concurrent threads accessing iperf stream lists are: 1) read/writes within `run` and `create` of this class, and 2) reads only by the `run_simulation` function of TrafficController on scheduled logging of global demand data. These will only conflict if (1) is writing and (2) is reading. So we make (1) acquire this lock when writing only, and (2) acquire this lock when reading. 
+        self.iperf_stream_lock: Lock = Lock()
         
         #sorted list of streams that are truant, i.e. still running beyond the timestamp we expected them to finish
         self.nontruant_iperf_stream_list:Collection[IperfStream] = SortedList(key=lambda stream: stream.expire_time)
@@ -65,11 +68,17 @@ class HostTrafficManager():
         time.sleep(2*self.flow_duration_distribution())
         while not self.traffic_control_block.kill_signal: 
 
+            # begin critical section for iperf stream lock, to edit lists
+            self.iperf_stream_lock.acquire()
+
             # first, process existing nontruant and truant stream lists.
             while len(self.nontruant_iperf_stream_list) > 0 and self.nontruant_iperf_stream_list[0].expire_time < time.time():
                 first_stream = self.nontruant_iperf_stream_list.pop()
                 self.truant_iperf_stream_list.add(first_stream)
 
+            # end critical section for iperf stream lock
+            self.iperf_stream_lock.release()
+            
             rm_indices = []
             for idx, iperf_stream in enumerate(self.truant_iperf_stream_list):
                 if iperf_stream.popen.poll() is not None:
@@ -86,8 +95,12 @@ class HostTrafficManager():
                     if time.time() - iperf_stream.expire_time > 10:
                         logger.warning(f"stream from {iperf_stream.src} to {iperf_stream.dst} has gone severely overtime (by {time.time() - iperf_stream.expire_time} secs)")
                     
-            # begin critical section; we need to check/update against total bandwidth and flow count
+            # begin critical section for global traffic control lock; we need to check/update against total bandwidth and flow count
             self.traffic_control_block.lock.acquire()
+
+
+            # begin critical section for iperf stream lock, to edit lists
+            self.iperf_stream_lock.acquire()
 
             # for the streams that have expired, update the total_streams and total_bw
             # so that we can eventually be allowed to create new streams to replace
@@ -96,6 +109,9 @@ class HostTrafficManager():
                 self.traffic_control_block.total_streams -= 1
                 self.traffic_control_block.total_bw -= self.truant_iperf_stream_list[idx].bw
                 del self.truant_iperf_stream_list[idx]
+
+            # end critical section for iperf stream lock
+            self.iperf_stream_lock.release()
 
             streams_to_create_args = []
             for next_host in random.sample(self.traffic_control_block.host_list, self.flows_per_host - len(self.nontruant_iperf_stream_list) - len(self.truant_iperf_stream_list)):
@@ -111,11 +127,17 @@ class HostTrafficManager():
                 duration = self.flow_duration_distribution()
                 streams_to_create_args.append((self, next_host, bw, duration))
 
+            # end critical section for global traffic control lock
             self.traffic_control_block.lock.release()
-            # end critical section
+
+            # begin critical section for iperf stream lock, to edit lists
+            self.iperf_stream_lock.acquire()
 
             for stream_arg in streams_to_create_args:
                 HostTrafficManager.create_stream(*stream_arg)
+
+            # end critical section for iperf stream lock
+            self.iperf_stream_lock.release()
 
             # we compute how long we sleep based on:
             #  1) until when the next nontruant iperf stream expires.
