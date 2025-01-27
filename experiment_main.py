@@ -75,9 +75,9 @@ if __name__ == "__main__":
     network_topo = NetworkXTopo.construct_nx_topo_from_config(topology_config)
     mininet = Mininet(network_topo, switch=OVSSwitch, controller=controller)
     mininet.start()
-    topology_controller = TopologyControlBlock(network_topo, mininet, network_event_config, topology_config)
+    topology_controller = TopologyControlBlock(network_topo, experiment_controller, mininet, network_event_config, topology_config)
     telemetry_controller = TelemetryControlBlock(mininet, experiment_controller, telemetry_config, error_generation_config)
-    traffic_generation_controller = TrafficControlBlock(mininet, traffic_generation_config)
+    traffic_generation_controller = TrafficControlBlock(mininet, experiment_controller, traffic_generation_config)
 
     logger.info("experiment starting.")
     pool = Pool(processes=3)

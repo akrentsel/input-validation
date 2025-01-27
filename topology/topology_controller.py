@@ -28,10 +28,12 @@ import sys
 from topology.topology_config import NetworkEventConfig, TopologyConfig
 from topology.network_topo import NetworkXTopo
 
+from experiment_controller import ExperimentControlBlock
+
 logger = logging.getLogger("topology")
 class TopologyControlBlock():
     AVG_LINK_LATENCY_TARGET = 40
-    def __init__(self, nx_topo:NetworkXTopo, mininet:Mininet, network_event_config:NetworkEventConfig, topology_config: TopologyConfig):
+    def __init__(self, nx_topo:NetworkXTopo, experiment_controller:ExperimentControlBlock, mininet:Mininet, network_event_config:NetworkEventConfig, topology_config: TopologyConfig):
         self.nx_topo = nx_topo
         self.mininet = mininet
 
@@ -40,6 +42,9 @@ class TopologyControlBlock():
         assert is_connected(self.nx_topo.nx_graph)
         # self.kill_signal = False
         self.topology_config = topology_config
+
+        self.experiment_controller = experiment_controller
+        self.next_event_time = self.experiment_controller.get_experiment_timestamp() + self.event_interarrival_fn()
 
     def run_simulation(self, conn:Connection):
         """
@@ -50,7 +55,12 @@ class TopologyControlBlock():
             # we listen for when main experiment spawn process (in main_experiment.py) tells
             # us to finish by listening for anything it sends along this conn object.
             while not conn.poll():
-                time.sleep(self.event_interarrival_fn())
+                time.sleep(max(0.1, min(5, self.next_event_time - self.experiment_controller.get_experiment_timestamp())))
+                if (self.next_event_time - self.experiment_controller.get_experiment_timestamp() > .1):
+                    continue
+
+                if (self.experiment_controller.get_experiment_timestamp() - self.next_event_time > 1):
+                    logger.warning(f"topology events have gone overtime by at least {self.experiment_controller.get_experiment_timestamp() - self.next_event_time} seconds!")
 
                 edge = random.sample(list(set([tuple(e) for e in self.nx_topo.base_nx_graph.edges])), 1)[0]
                 mn_name1, mn_name2 = self.nx_topo.nx_mn_name_map[edge[0]], self.nx_topo.nx_mn_name_map[edge[1]]
@@ -81,6 +91,8 @@ class TopologyControlBlock():
                             time.sleep(1)
 
                     assert all([link.intf1.isUp() and link.intf2.isUp() for link in self.mininet.linksBetween(n1, n2)])
+
+                self.next_event_time += self.event_interrarival_fn() 
             logger.debug("finish running topology control.")
         except Exception as e:
             logger.error(e, exc_info=True)

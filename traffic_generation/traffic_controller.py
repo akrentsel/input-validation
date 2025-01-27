@@ -49,6 +49,7 @@ class TrafficControlBlock():
         for host in mininet.hosts:
             self.host_manager_map[host] = HostTrafficManager(host, self, traffic_generation_config)
 
+        Path(self.traffic_generation_config.demand_log_dir).mkdir(exist_ok=False)
         with open(Path(self.traffic_generation_config.demand_log_dir) / "idx_host_map.json", 'w') as fp:
             json.dump(self.idx_host_map, fp)
 
@@ -64,7 +65,7 @@ class TrafficControlBlock():
     
     def write_to_disk(self):
         logger.debug(f"writing demands at iteration {self.demand_fileno} to disk")
-        np.savez(self.get_arr_path(), np.concatenate(self.numpy_arrs))
+        np.savez(self.get_arr_path(), np.stack(self.numpy_arrs))
         np.savez(self.get_timestamp_path(), np.array(self.timestamps))
 
         self.timestamps = []
@@ -93,17 +94,23 @@ class TrafficControlBlock():
             self.write_to_disk()
 
     def finalize_logs(self):
-        logger.debug(f"finalizing demand logs with {self.demand_fileno} logs detected")
         final_timestamp = []
         final_numpy_arrs = []
         if len(self.timestamps) > 0:
             self.write_to_disk()
+        logger.debug(f"finalizing demand logs with {self.demand_fileno} logs detected")
         for idx in range(self.demand_fileno):
-            final_timestamp.append(np.load(self.get_timestamp_path(idx)))
-            final_numpy_arrs.append(np.load(self.get_arr_path(idx)))
+            this_timestamp_file = np.load(self.get_timestamp_path(idx))
+            this_arr_file = np.load(self.get_arr_path(idx))
+            
+            final_timestamp.append(this_timestamp_file['arr_0'])
+            final_numpy_arrs.append(this_arr_file['arr_0'])
+            
+            this_timestamp_file.close()
+            this_arr_file.close()
 
-            np.savez(Path(self.traffic_generation_config.demand_log_dir) / f"demand_timestamp_final.npz", np.concatenate(final_timestamp))
-            np.savez(Path(self.traffic_generation_config.demand_log_dir) / f"demand_array_final.npz", np.concatenate(final_numpy_arrs))
+        np.savez(Path(self.traffic_generation_config.demand_log_dir) / f"demand_timestamp_final.npz", np.concatenate(final_timestamp))
+        np.savez(Path(self.traffic_generation_config.demand_log_dir) / f"demand_array_final.npz", np.concatenate(final_numpy_arrs))
 
     def run_simulation(self, conn:Connection):
         try:
