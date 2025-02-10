@@ -27,6 +27,23 @@ logger = logging.getLogger("topology")
 class NetworkXTopo(Topo):
     # TODO: assert that bw, latency arguments are passed correctly
 
+    #override
+    def addSwitch( self, name, **opts ):
+        super(Topo, self).addSwitch(name, opts)
+        self.router_graph.add_node(name, node_type="switch")
+
+    #override
+    def addLink( self, node1, node2, port1=None, port2=None,
+                 key=None, **opts):
+        opts = super(Topo, self).addLink(node1, node2, port1=None, port2=None,
+                 key=None, **opts)
+        self.router_graph.add_edge(node1, node2, opts)
+
+    #override
+    def addHost( self, name, **opts ):
+        super(Topo, self).addHost(name, opts)
+        self.router_graph.add_node(name, node_type="host")
+
     def build(self, graph:nx.Graph, topology_config:TopologyConfig, **params):
         """
         this is our override, which we use to add links/switches based on 
@@ -43,6 +60,7 @@ class NetworkXTopo(Topo):
 
         assert not graph.is_multigraph()
         self.base_nx_graph = graph.copy()
+        self.router_graph = nx.Graph()
 
         for node in graph.nodes:
             logger.debug(f"adding switch {'s'+str(node)}")

@@ -87,6 +87,7 @@ telemetry_config:
 # :hosts_per_switch: number of hosts to attach to each switch specified as nodes in the graph. 
 topology_config:
   # logging_dir: "/home/mininet/input-validation/.logout"
+  topo_log_dir: "/home/hwei0/experiment-out"
   use_bw_delay: True
   naive_link_bw: 10000
   naive_link_delay: 25

@@ -46,6 +46,11 @@ class TopologyControlBlock():
         self.experiment_controller = experiment_controller
         self.next_event_time = self.experiment_controller.get_experiment_timestamp() + self.event_interarrival_fn()
 
+        Path(topology_config.topo_log_dir).mkdir(exist_ok=True)
+        topo_log_path = Path(topology_config.topo_log_dir) / "topology.graphml"
+        assert not topo_log_path.exists()
+        nx.write_graphml(self.nx_topo.router_graph, topo_log_path)
+
     def run_simulation(self, conn:Connection):
         """
         Main entry point for the one process managing topology changes (i.e link up/down)

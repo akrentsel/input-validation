@@ -7,6 +7,8 @@ class NetworkEventConfig(BaseModel):
     event_interrarival_mean: float =  60
 
 class TopologyConfig(BaseModel):
+    topo_log_dir:str = None
+
     # logging_dir: str
     use_bw_delay:bool = False
     
