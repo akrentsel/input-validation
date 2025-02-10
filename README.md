@@ -23,7 +23,7 @@ Codebase for exploring feasibility of input validation.
     3. Using the same `pip` binary you will be running in `sudo` mode, run `cd input-validation; {path to pip binary} install -r requirements.txt`
 2. Start ONOS controller: 
     1. in one terminal, run `sudo docker run -t -p 8181:8181 -p 8101:8101 -p 5005:5005 -p 830:830 --name onos onosproject/onos`; wait for a status message of the form `Updated node {IP address} state to READY` before proceeding (usually that IP is 172.17.0.2); *do not quit or exit this terminal, or use -d flag to start the container in detached mode*
-    2. in another terminal, using the IP address seen in the above status message, run `ssh -p 8101 karaf@{IP address}`; this should open an ONOS karaf CLI interface.
+    2. in another terminal, using the IP address seen in the above status message, run `ssh -p 8101 karaf@{IP address}`, and use the default password `karaf`; this should open an ONOS karaf CLI interface.
     3. Remember that IP address; you will need it later to run the experiment.
 3. Configure ONOS controller:
     1. in the ONOS karaf CLI interface from the previous step, run the following:
