@@ -26,23 +26,36 @@ from topology.topology_config import TopologyConfig
 logger = logging.getLogger("topology")
 class NetworkXTopo(Topo):
     # TODO: assert that bw, latency arguments are passed correctly
+    #def __init__( self, *args, **params ):
+    #    super().__init__(args, params)
 
     #override
     def addSwitch( self, name, **opts ):
-        super(Topo, self).addSwitch(name, opts)
+        res = super().addSwitch(name, **opts)
         self.router_graph.add_node(name, node_type="switch")
+        return res
 
     #override
     def addLink( self, node1, node2, port1=None, port2=None,
-                 key=None, **opts):
-        opts = super(Topo, self).addLink(node1, node2, port1=None, port2=None,
-                 key=None, **opts)
-        self.router_graph.add_edge(node1, node2, opts)
+                 key=None, **opts): 
+        if not opts and self.lopts:
+            opts = self.lopts
+        port1, port2 = self.addPort( node1, node2, port1, port2 )
+        opts = dict( opts )
+        super().addLink(node1, node2, port1, port2,
+                 key, **opts)
+        opts.update( node1=node1, node2=node2, port1=port1, port2=port2 )
+        for k in list(opts.keys()):
+            if isinstance(opts[k], dict):
+                del opts[k]
+                logger.warn(f"deleting entry {k} from opts")
+        self.router_graph.add_edge(node1, node2, **opts)
 
     #override
     def addHost( self, name, **opts ):
-        super(Topo, self).addHost(name, opts)
+        res = super().addHost(name, **opts)
         self.router_graph.add_node(name, node_type="host")
+        return res
 
     def build(self, graph:nx.Graph, topology_config:TopologyConfig, **params):
         """
