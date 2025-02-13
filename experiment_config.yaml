@@ -67,7 +67,7 @@ telemetry_config:
 #       - for each link, we will do the following to assign delays:
 #           - if 'use_naive_delay' set to True, force all links to have delay :naive_link_delay:
 #           - otherwise:
-#               - if using TopoHub import, each edge in imported graph has a 'distance' parameter:
+#               - if using TopoHub import, each edge in imported graph has a 'dist' parameter:
 #                   - so, assign each edge a delay proportional to this distance, 
 #                       but normalized to have a global mean of topohub_mean_link_delay as 
 #                       specified in this file
@@ -92,13 +92,13 @@ topology_config:
   naive_link_bw: 10000
   naive_link_delay: 25
   
-  use_naive_bw: True
+  use_naive_bw: False
   use_naive_delay: False
 
-  topohub_name: "sndlib/newyork"
-  graph_file_path: None
-  networkx_graph_read_function: None
-  mininet_topo_path: None
+    #topohub_name: "sndlib/newyork"
+  graph_file_path: "Epoch.gml"
+  networkx_graph_read_function: "read_gml"
+    #mininet_topo_path: None
 
   topohub_mean_link_delay: 25
   hosts_per_switch: 2

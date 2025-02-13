@@ -93,7 +93,7 @@ class NetworkXTopo(Topo):
                 # try to use bw/delay parameters in each edge of graph, if they exist and config tells us to use them (i.e. if use_naive_{bw/delay} set to False); otherwise, use the naive bw/delays specified in config. 
                 bw = graph.edges[end1, end2].get("bw", self.topology_config.naive_link_bw) if (not self.topology_config.use_naive_bw) else self.topology_config.naive_link_bw
                 delay = graph.edges[end1, end2].get("delay", self.topology_config.naive_link_delay) if (not self.topology_config.use_naive_delay) else self.topology_config.naive_link_delay
-            if (bw is not None and delay is not None):
+            if (bw is None and delay is None):
                 logger.debug(f"adding edge between {end1} and {end2} without bw/delay")
             else:
                 logger.debug(f"adding edge between {end1} and {end2} with bw {bw}, delay {delay}")
@@ -139,6 +139,8 @@ class NetworkXTopo(Topo):
         logger.info(f"constructing topology from graph file {topology_config.graph_file_path}")
         nx_graph = getattr(nx, topology_config.networkx_graph_read_function)(topology_config.graph_file_path)
 
+        nx_graph = nx.relabel_nodes(nx_graph, {old_node: f"{idx}" for (idx, old_node) in enumerate(list(nx_graph.nodes(data=False)))})
+
         return NetworkXTopo(graph=nx_graph, topology_config=topology_config, **params)
 
     @staticmethod
@@ -176,7 +178,7 @@ class NetworkXTopo(Topo):
         if (topology_config.topohub_name is not None):
             return NetworkXTopo.construct_nx_topo_from_topohub(topology_config, **params)
         elif topology_config.graph_file_path is not None:
-            assert networkx_graph_read_function is not None, "need to specify networkX function for reading graph"
+            assert topology_config.networkx_graph_read_function is not None, "need to specify networkX function for reading graph"
 
             return NetworkXTopo.construct_nx_topo_from_graph_file(topology_config, **params)
         else:
